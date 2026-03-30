@@ -2,7 +2,7 @@ import { supabase } from './supabase'
 import { ROOM_IDS } from '../data/rooms'
 
 const TENANT_DOMAIN = 'tenant.somjai.local'
-const TENANT_SETUP_KEY = import.meta.env.VITE_TENANT_SETUP_KEY ?? 'setup-tenant-2026'
+const TENANT_SETUP_KEY = import.meta.env.VITE_TENANT_SETUP_KEY ?? 'tenant-setup-2026-9k2x'
 
 export interface TenantIdentity {
   userId: string

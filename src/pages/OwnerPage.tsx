@@ -14,7 +14,7 @@ interface MeterDraft {
   mode: BillingMode
 }
 
-const OWNER_PIN = import.meta.env.VITE_OWNER_PIN ?? '2468'
+const OWNER_PIN = import.meta.env.VITE_OWNER_PIN ?? '123789'
 
 function createInitialDrafts(): Record<string, MeterDraft> {
   return ROOMS.reduce<Record<string, MeterDraft>>((acc, room) => {
