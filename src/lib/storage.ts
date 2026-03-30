@@ -91,6 +91,32 @@ function sortBillsNewestFirst(bills: BillRecord[]): BillRecord[] {
   })
 }
 
+async function hasAuthenticatedUser(): Promise<boolean> {
+  if (!supabase) {
+    return false
+  }
+
+  const { data, error } = await supabase.auth.getUser()
+  if (error) {
+    return false
+  }
+
+  return Boolean(data.user)
+}
+
+async function getAuthenticatedClient() {
+  if (!supabase) {
+    return null
+  }
+
+  const hasUser = await hasAuthenticatedUser()
+  if (!hasUser) {
+    return null
+  }
+
+  return supabase
+}
+
 export interface MonthlySummary {
   billingMonthKey: string
   billingMonthLabel: string
@@ -129,11 +155,12 @@ export function getRoomHistoryFromBills(allBills: BillRecord[], roomId: string):
 }
 
 export async function getAllBills(): Promise<BillRecord[]> {
-  if (!supabase) {
+  const client = await getAuthenticatedClient()
+  if (!client) {
     return sortBillsNewestFirst(getLocalBills())
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('bills')
     .select('*')
     .order('issued_at_iso', { ascending: false })
@@ -148,11 +175,12 @@ export async function getAllBills(): Promise<BillRecord[]> {
 }
 
 export async function getBillsByRoom(roomId: string): Promise<BillRecord[]> {
-  if (!supabase) {
+  const client = await getAuthenticatedClient()
+  if (!client) {
     return getRoomHistoryFromBills(getLocalBills(), roomId)
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('bills')
     .select('*')
     .eq('room_id', roomId)
@@ -166,11 +194,12 @@ export async function getBillsByRoom(roomId: string): Promise<BillRecord[]> {
 }
 
 export async function getLatestBills(): Promise<BillsByRoom> {
-  if (!supabase) {
+  const client = await getAuthenticatedClient()
+  if (!client) {
     return toLatestMap(getLocalBills())
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('bills')
     .select('*')
     .order('issued_at_iso', { ascending: false })
@@ -189,11 +218,12 @@ export async function saveBill(bill: BillRecord): Promise<void> {
   const nextBills = [...currentBills, bill]
   setLocalBills(nextBills)
 
-  if (!supabase) {
+  const client = await getAuthenticatedClient()
+  if (!client) {
     return
   }
 
-  const { error } = await supabase.from('bills').insert({
+  const { error } = await client.from('bills').insert({
     id: bill.id,
     room_id: bill.roomId,
     mode: bill.mode,
@@ -227,11 +257,12 @@ export async function saveBill(bill: BillRecord): Promise<void> {
 export async function clearAllBills(): Promise<void> {
   setLocalBills([])
 
-  if (!supabase) {
+  const client = await getAuthenticatedClient()
+  if (!client) {
     return
   }
 
-  const { error } = await supabase.from('bills').delete().not('id', 'is', null)
+  const { error } = await client.from('bills').delete().not('id', 'is', null)
   if (error) {
     throw new Error(`ลบข้อมูลบน Supabase ไม่สำเร็จ: ${error.message}`)
   }
