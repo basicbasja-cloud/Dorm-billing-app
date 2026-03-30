@@ -3,13 +3,13 @@ import { BillDocument } from '../components/BillDocument'
 import { ROOM_IDS } from '../data/rooms'
 import {
   canUseTenantAuth,
+  getTenantBills,
   getCurrentTenant,
   registerTenantWithRoom,
   signInTenant,
   signOutTenant,
   type TenantIdentity,
 } from '../lib/auth'
-import { getBillsByRoom } from '../lib/storage'
 import type { BillRecord } from '../types'
 import { saveNodeAsPng } from '../utils/png'
 
@@ -34,7 +34,7 @@ export function TenantPage() {
         const current = await getCurrentTenant()
         if (current) {
           setIdentity(current)
-          const bills = await getBillsByRoom(current.roomId)
+          const bills = await getTenantBills(current.roomId)
           setHistory(bills)
           setSelectedBillId(bills[0]?.id ?? '')
         }
@@ -54,7 +54,7 @@ export function TenantPage() {
   }, [history, selectedBillId])
 
   async function refreshRoomBills(roomId: string) {
-    const bills = await getBillsByRoom(roomId)
+    const bills = await getTenantBills(roomId)
     setHistory(bills)
     setSelectedBillId(bills[0]?.id ?? '')
   }

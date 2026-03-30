@@ -1,15 +1,33 @@
 import { supabase } from './supabase'
 import { ROOM_IDS } from '../data/rooms'
+import type { BillRecord } from '../types'
 
 const TENANT_DOMAIN = 'tenant.somjai.app'
-const LEGACY_TENANT_DOMAIN = 'tenant.somjai.local'
-const TENANT_SETUP_KEY = import.meta.env.VITE_TENANT_SETUP_KEY ?? 'somjai1234'
-const ACCEPTED_TENANT_SETUP_KEYS = new Set([
-  TENANT_SETUP_KEY,
-  'somjai1234',
-  'setup-tenant-2026',
-  'tenant-setup-2026-9k2x',
-])
+const TENANT_SESSION_STORAGE_KEY = 'tenant_session_v2'
+
+interface TenantSession {
+  roomId: string
+  passwordHash: string
+}
+
+interface BillRow {
+  id: string
+  room_id: string
+  mode: BillRecord['mode']
+  monthly_rent: number
+  electric_unit_price: number
+  meter_before: number
+  meter_after: number
+  electric_units: number
+  electric_amount: number
+  water_amount: number
+  total_amount: number
+  billing_month_label: string
+  billing_month_key: string
+  due_date_label: string
+  issued_at_iso: string
+  lines: BillRecord['lines']
+}
 
 export interface TenantIdentity {
   userId: string
@@ -25,43 +43,93 @@ export function canUseTenantAuth(): boolean {
   return Boolean(supabase)
 }
 
-async function getProfileRoom(userId: string): Promise<string | null> {
-  if (!supabase) {
+function toBillRecord(row: BillRow): BillRecord {
+  return {
+    id: row.id,
+    roomId: row.room_id,
+    mode: row.mode,
+    monthlyRent: row.monthly_rent,
+    electricUnitPrice: row.electric_unit_price,
+    meterBefore: row.meter_before,
+    meterAfter: row.meter_after,
+    electricUnits: row.electric_units,
+    electricAmount: row.electric_amount,
+    waterAmount: row.water_amount,
+    totalAmount: row.total_amount,
+    billingMonthLabel: row.billing_month_label,
+    billingMonthKey: row.billing_month_key,
+    dueDateLabel: row.due_date_label,
+    issuedAtISO: row.issued_at_iso,
+    lines: row.lines,
+  }
+}
+
+function getTenantSession(): TenantSession | null {
+  try {
+    const raw = localStorage.getItem(TENANT_SESSION_STORAGE_KEY)
+    if (!raw) {
+      return null
+    }
+
+    const parsed = JSON.parse(raw) as Partial<TenantSession>
+    if (!parsed.roomId || !parsed.passwordHash) {
+      return null
+    }
+
+    return {
+      roomId: parsed.roomId,
+      passwordHash: parsed.passwordHash,
+    }
+  } catch {
     return null
   }
+}
 
-  const { data, error } = await supabase
-    .from('tenant_profiles')
-    .select('room_id')
-    .eq('user_id', userId)
-    .maybeSingle()
-
-  if (error || !data) {
-    return null
+function setTenantSession(session: TenantSession | null): void {
+  if (!session) {
+    localStorage.removeItem(TENANT_SESSION_STORAGE_KEY)
+    return
   }
 
-  return data.room_id as string
+  localStorage.setItem(TENANT_SESSION_STORAGE_KEY, JSON.stringify(session))
+}
+
+async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder()
+  const bytes = encoder.encode(password)
+  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  const digestArray = Array.from(new Uint8Array(digest))
+  return digestArray.map((value) => value.toString(16).padStart(2, '0')).join('')
 }
 
 export async function getCurrentTenant(): Promise<TenantIdentity | null> {
+  const session = getTenantSession()
+  if (!session) {
+    return null
+  }
+
   if (!supabase) {
-    return null
+    return {
+      userId: session.roomId,
+      roomId: session.roomId,
+      email: roomToTenantEmail(session.roomId),
+    }
   }
 
-  const { data, error } = await supabase.auth.getUser()
-  if (error || !data.user) {
-    return null
-  }
+  const { data, error } = await supabase.rpc('tenant_login', {
+    p_room_id: session.roomId,
+    p_password_hash: session.passwordHash,
+  })
 
-  const roomId = await getProfileRoom(data.user.id)
-  if (!roomId) {
+  if (error || data !== true) {
+    setTenantSession(null)
     return null
   }
 
   return {
-    userId: data.user.id,
-    roomId,
-    email: data.user.email ?? roomToTenantEmail(roomId),
+    userId: session.roomId,
+    roomId: session.roomId,
+    email: roomToTenantEmail(session.roomId),
   }
 }
 
@@ -78,37 +146,15 @@ export async function registerTenantWithRoom(params: {
     throw new Error('เลขห้องไม่ถูกต้อง')
   }
 
-  if (!ACCEPTED_TENANT_SETUP_KEYS.has(params.setupKey.trim())) {
-    throw new Error('รหัสยืนยันการลงทะเบียนไม่ถูกต้อง')
-  }
-
-  const email = roomToTenantEmail(params.roomId)
-
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password: params.password,
+  const passwordHash = await hashPassword(params.password)
+  const { error } = await supabase.rpc('tenant_register', {
+    p_room_id: params.roomId,
+    p_password_hash: passwordHash,
+    p_setup_key: params.setupKey.trim(),
   })
 
   if (error) {
-    if (error.message.toLowerCase().includes('email rate limit exceeded')) {
-      throw new Error('สมัครบัญชีถี่เกินไปชั่วคราว (email rate limit exceeded) กรุณารอประมาณ 1-5 นาที แล้วลองใหม่อีกครั้ง')
-    }
-
     throw new Error(error.message)
-  }
-
-  const userId = data.user?.id
-  if (!userId) {
-    throw new Error('ไม่สามารถสร้างผู้ใช้ได้ กรุณาปิด email confirmation ใน Supabase Auth ก่อนทดสอบ')
-  }
-
-  const { error: profileError } = await supabase.from('tenant_profiles').upsert({
-    user_id: userId,
-    room_id: params.roomId,
-  })
-
-  if (profileError) {
-    throw new Error(profileError.message)
   }
 }
 
@@ -117,51 +163,47 @@ export async function signInTenant(roomId: string, password: string): Promise<Te
     throw new Error('ยังไม่ได้ตั้งค่า Supabase')
   }
 
-  const primaryEmail = roomToTenantEmail(roomId)
-  let usedEmail = primaryEmail
-  let { data, error } = await supabase.auth.signInWithPassword({
-    email: primaryEmail,
-    password,
+  const passwordHash = await hashPassword(password)
+  const { data, error } = await supabase.rpc('tenant_login', {
+    p_room_id: roomId,
+    p_password_hash: passwordHash,
   })
 
-  if (error || !data.user) {
-    const legacyEmail = roomToTenantEmail(roomId, LEGACY_TENANT_DOMAIN)
-    if (legacyEmail !== primaryEmail) {
-      const legacyResult = await supabase.auth.signInWithPassword({
-        email: legacyEmail,
-        password,
-      })
-
-      data = legacyResult.data
-      error = legacyResult.error
-      usedEmail = legacyEmail
-    }
+  if (error || data !== true) {
+    throw new Error(error?.message ?? 'เลขห้องหรือรหัสผ่านไม่ถูกต้อง')
   }
 
-  if (error || !data.user) {
-    throw new Error(error?.message ?? 'เข้าสู่ระบบไม่สำเร็จ')
-  }
-
-  const profileRoom = await getProfileRoom(data.user.id)
-  if (!profileRoom) {
-    throw new Error('ไม่พบการผูกบัญชีกับเลขห้อง')
-  }
-
-  if (profileRoom !== roomId) {
-    throw new Error('บัญชีนี้ไม่ตรงกับเลขห้องที่เลือก')
-  }
+  setTenantSession({ roomId, passwordHash })
 
   return {
-    userId: data.user.id,
-    roomId: profileRoom,
-    email: data.user.email ?? usedEmail,
+    userId: roomId,
+    roomId,
+    email: roomToTenantEmail(roomId),
   }
 }
 
-export async function signOutTenant(): Promise<void> {
+export async function getTenantBills(roomId: string): Promise<BillRecord[]> {
   if (!supabase) {
-    return
+    return []
   }
 
-  await supabase.auth.signOut()
+  const session = getTenantSession()
+  if (!session || session.roomId !== roomId) {
+    return []
+  }
+
+  const { data, error } = await supabase.rpc('tenant_fetch_bills', {
+    p_room_id: roomId,
+    p_password_hash: session.passwordHash,
+  })
+
+  if (error || !Array.isArray(data)) {
+    return []
+  }
+
+  return (data as BillRow[]).map(toBillRecord)
+}
+
+export async function signOutTenant(): Promise<void> {
+  setTenantSession(null)
 }

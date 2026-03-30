@@ -305,6 +305,18 @@ select {
   color: var(--muted);
 }
 
+.tenant-account-tools {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.tenant-account-tools select {
+  min-width: 120px;
+}
+
 .bill-panel h2 {
   margin-bottom: 12px;
 }

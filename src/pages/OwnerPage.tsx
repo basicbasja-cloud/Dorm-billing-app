@@ -43,6 +43,8 @@ export function OwnerPage() {
   const [ownerEmail, setOwnerEmail] = useState('')
   const [ownerPassword, setOwnerPassword] = useState('')
   const [isSigningIn, setIsSigningIn] = useState(false)
+  const [tenantAccountRoomId, setTenantAccountRoomId] = useState(ROOMS[0].id)
+  const [isDeletingTenantAccount, setIsDeletingTenantAccount] = useState(false)
   const [billsByRoom, setBillsByRoom] = useState<BillsByRoom>({})
   const [drafts, setDrafts] = useState<Record<string, MeterDraft>>(() => createInitialDrafts())
   const [selectedRoomId, setSelectedRoomId] = useState(ROOMS[0].id)
@@ -251,6 +253,35 @@ export function OwnerPage() {
     }
   }
 
+  async function deleteTenantAccount() {
+    if (!supabase) {
+      setError('ยังไม่ได้ตั้งค่า Supabase')
+      return
+    }
+
+    const shouldDelete = window.confirm(`ยืนยันลบบัญชีผู้เช่าห้อง ${tenantAccountRoomId}? ผู้เช่าจะต้องลงทะเบียนใหม่`)
+    if (!shouldDelete) {
+      return
+    }
+
+    setError('')
+    setSuccess('')
+
+    try {
+      setIsDeletingTenantAccount(true)
+      const { error: deleteError } = await supabase.from('tenant_accounts').delete().eq('room_id', tenantAccountRoomId)
+      if (deleteError) {
+        throw new Error(deleteError.message)
+      }
+
+      setSuccess(`ลบบัญชีผู้เช่าห้อง ${tenantAccountRoomId} แล้ว`)
+    } catch (deleteAccountError) {
+      setError(deleteAccountError instanceof Error ? deleteAccountError.message : 'ลบบัญชีผู้เช่าไม่สำเร็จ')
+    } finally {
+      setIsDeletingTenantAccount(false)
+    }
+  }
+
   if (!isAuthorized) {
     return (
       <main className="page">
@@ -378,6 +409,23 @@ export function OwnerPage() {
               </article>
             )
           })}
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2>จัดการบัญชีผู้เช่า</h2>
+        <p className="panel-description">ใช้เมื่อลูกบ้านย้ายออก เพื่อเปิดให้คนใหม่ลงทะเบียนห้องเดิมได้ทันที</p>
+        <div className="tenant-account-tools">
+          <select value={tenantAccountRoomId} onChange={(event) => setTenantAccountRoomId(event.target.value)}>
+            {ROOMS.map((room) => (
+              <option key={room.id} value={room.id}>
+                {room.id}
+              </option>
+            ))}
+          </select>
+          <button className="btn btn-danger" onClick={() => void deleteTenantAccount()} disabled={isDeletingTenantAccount}>
+            {isDeletingTenantAccount ? 'กำลังลบ...' : 'ลบบัญชีผู้เช่าห้องนี้'}
+          </button>
         </div>
       </section>
 
