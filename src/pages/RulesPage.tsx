@@ -4,7 +4,7 @@ export function RulesPage() {
   return (
     <main className="page">
       <section className="panel">
-        <h1>กฎระเบียบหอพัก</h1>
+        <h1>ระเบียบการพักอาศัย</h1>
         <p className="panel-description">ผู้เช่าสามารถตรวจสอบกฎหอพักได้จากหน้านี้</p>
         <ol className="rules-list">
           {DORM_RULES.map((rule) => (
