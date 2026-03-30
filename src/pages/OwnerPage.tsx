@@ -1,0 +1,338 @@
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { toPng } from 'html-to-image'
+import { saveAs } from 'file-saver'
+import { BillDocument } from '../components/BillDocument'
+import { ROOMS } from '../data/rooms'
+import { getAllBills, getLatestBills, getRoomHistoryFromBills, saveBill, summarizeMonthlyRevenue } from '../lib/storage'
+import { formatCurrency } from '../utils/billing'
+import { createBill } from '../utils/billing'
+import type { BillRecord, BillsByRoom, BillingMode } from '../types'
+
+interface MeterDraft {
+  meterBefore: number
+  meterAfter: number
+  mode: BillingMode
+}
+
+const OWNER_PIN = import.meta.env.VITE_OWNER_PIN ?? '2468'
+
+function createInitialDrafts(): Record<string, MeterDraft> {
+  return ROOMS.reduce<Record<string, MeterDraft>>((acc, room) => {
+    acc[room.id] = {
+      meterBefore: 0,
+      meterAfter: 0,
+      mode: 'postpaid',
+    }
+    return acc
+  }, {})
+}
+
+export function OwnerPage() {
+  const [pin, setPin] = useState('')
+  const [isAuthorized, setIsAuthorized] = useState(sessionStorage.getItem('owner_access') === 'ok')
+  const [billsByRoom, setBillsByRoom] = useState<BillsByRoom>({})
+  const [drafts, setDrafts] = useState<Record<string, MeterDraft>>(() => createInitialDrafts())
+  const [selectedRoomId, setSelectedRoomId] = useState(ROOMS[0].id)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [allBills, setAllBills] = useState<BillRecord[]>([])
+  const [historyRoomId, setHistoryRoomId] = useState(ROOMS[0].id)
+
+  const billRefs = useRef<Record<string, HTMLDivElement | null>>({})
+
+  useEffect(() => {
+    void (async () => {
+      const latest = await getLatestBills()
+      setBillsByRoom(latest)
+      const all = await getAllBills()
+      setAllBills(all)
+    })()
+  }, [])
+
+  const selectedBill = useMemo<BillRecord | undefined>(
+    () => billsByRoom[selectedRoomId],
+    [billsByRoom, selectedRoomId],
+  )
+
+  const roomHistory = useMemo(() => getRoomHistoryFromBills(allBills, historyRoomId), [allBills, historyRoomId])
+  const monthlyReport = useMemo(() => summarizeMonthlyRevenue(allBills), [allBills])
+
+  function authorizeOwner(event: FormEvent) {
+    event.preventDefault()
+    if (pin !== OWNER_PIN) {
+      setError('PIN ไม่ถูกต้อง')
+      return
+    }
+
+    sessionStorage.setItem('owner_access', 'ok')
+    setIsAuthorized(true)
+    setError('')
+  }
+
+  function updateDraft(roomId: string, patch: Partial<MeterDraft>) {
+    setDrafts((current) => ({
+      ...current,
+      [roomId]: {
+        ...current[roomId],
+        ...patch,
+      },
+    }))
+  }
+
+  async function issueBillForRoom(roomId: string) {
+    setError('')
+    setSuccess('')
+    const room = ROOMS.find((item) => item.id === roomId)
+    const draft = drafts[roomId]
+
+    if (!room || !draft) {
+      return
+    }
+
+    if (draft.meterAfter < draft.meterBefore) {
+      setError(`ห้อง ${roomId}: เลขมิเตอร์หลังต้องมากกว่าหรือเท่ากับเลขก่อน`)
+      return
+    }
+
+    const bill = createBill({
+      room,
+      mode: draft.mode,
+      meterBefore: draft.meterBefore,
+      meterAfter: draft.meterAfter,
+    })
+
+    try {
+      await saveBill(bill)
+      setBillsByRoom((current) => ({ ...current, [roomId]: bill }))
+      setAllBills((current) => [bill, ...current])
+      setSelectedRoomId(roomId)
+      setSuccess(`ออกบิลห้อง ${roomId} เรียบร้อย`)
+    } catch (issueError) {
+      setError(issueError instanceof Error ? issueError.message : 'ออกบิลไม่สำเร็จ')
+    }
+  }
+
+  async function saveRoomBill(roomId: string) {
+    const bill = billsByRoom[roomId]
+    const node = billRefs.current[roomId]
+
+    if (!bill || !node) {
+      setError(`ไม่พบบิลของห้อง ${roomId}`)
+      return
+    }
+
+    const image = await toPng(node, {
+      cacheBust: true,
+      pixelRatio: 2,
+      backgroundColor: '#fffef8',
+    })
+
+    saveAs(image, `${bill.roomId}_${bill.billingMonthKey}.png`)
+  }
+
+  async function saveAllBills() {
+    setError('')
+    const issued = ROOMS.map((room) => room.id).filter((roomId) => Boolean(billsByRoom[roomId]))
+
+    if (issued.length === 0) {
+      setError('ยังไม่มีบิลที่ออกแล้วให้เซฟ')
+      return
+    }
+
+    for (const roomId of issued) {
+      await saveRoomBill(roomId)
+      await new Promise((resolve) => setTimeout(resolve, 120))
+    }
+
+    setSuccess('เซฟบิลทั้งหมดเรียบร้อย')
+  }
+
+  if (!isAuthorized) {
+    return (
+      <main className="page">
+        <section className="panel owner-gate">
+          <h1>เฉพาะเจ้าของหอ</h1>
+          <p>กรอก PIN เพื่อเข้าหน้าออกบิล</p>
+          <form onSubmit={authorizeOwner} className="pin-form">
+            <input
+              type="password"
+              inputMode="numeric"
+              value={pin}
+              onChange={(event) => setPin(event.target.value)}
+              placeholder="Owner PIN"
+            />
+            <button className="btn btn-primary" type="submit">
+              เข้าสู่ระบบ
+            </button>
+          </form>
+          {error ? <p className="error-text">{error}</p> : null}
+        </section>
+      </main>
+    )
+  }
+
+  return (
+    <main className="page owner-page">
+      <section className="panel">
+        <div className="panel-header-row">
+          <h1>แดชบอร์ดเจ้าของหอ</h1>
+          <button className="btn btn-secondary" onClick={() => void saveAllBills()}>
+            เซฟทั้งหมด (ทุกห้อง)
+          </button>
+        </div>
+
+        <p className="panel-description">ใส่เลขมิเตอร์ก่อนและหลัง แล้วเลือกประเภทการชำระก่อนออกบิล</p>
+        {error ? <p className="error-text">{error}</p> : null}
+        {success ? <p className="status-text success">{success}</p> : null}
+
+        <div className="room-grid">
+          {ROOMS.map((room) => {
+            const draft = drafts[room.id] ?? { meterBefore: 0, meterAfter: 0, mode: 'postpaid' as BillingMode }
+            const hasIssued = Boolean(billsByRoom[room.id])
+
+            return (
+              <article key={room.id} className="room-card">
+                <header>
+                  <h3>{room.id}</h3>
+                  <p>ค่าเช่า {room.monthlyRent.toLocaleString('th-TH')} บาท</p>
+                </header>
+
+                <label>
+                  เลขไฟก่อน
+                  <input
+                    type="number"
+                    min={0}
+                    value={draft.meterBefore}
+                    onChange={(event) => updateDraft(room.id, { meterBefore: Number(event.target.value) })}
+                  />
+                </label>
+
+                <label>
+                  เลขไฟหลัง
+                  <input
+                    type="number"
+                    min={0}
+                    value={draft.meterAfter}
+                    onChange={(event) => updateDraft(room.id, { meterAfter: Number(event.target.value) })}
+                  />
+                </label>
+
+                <label>
+                  ประเภทการชำระ
+                  <select
+                    value={draft.mode}
+                    onChange={(event) => updateDraft(room.id, { mode: event.target.value as BillingMode })}
+                  >
+                    <option value="postpaid">จ่ายเดือนปัจจุบัน</option>
+                    <option value="prepaid">จ่ายล่วงหน้า</option>
+                  </select>
+                </label>
+
+                <div className="card-actions">
+                  <button className="btn btn-primary" onClick={() => void issueBillForRoom(room.id)}>
+                    ออกบิล
+                  </button>
+                  <button className="btn btn-secondary" onClick={() => void saveRoomBill(room.id)} disabled={!hasIssued}>
+                    เซฟ PNG
+                  </button>
+                  <button className="btn btn-ghost" onClick={() => setSelectedRoomId(room.id)} disabled={!hasIssued}>
+                    ดูบิล
+                  </button>
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      </section>
+
+      <section className="panel bill-panel">
+        <h2>ตัวอย่างบิลล่าสุด</h2>
+        {selectedBill ? <BillDocument bill={selectedBill} /> : <p>ยังไม่มีบิลที่ออกแล้ว</p>}
+      </section>
+
+      <section className="panel">
+        <h2>ประวัติบิลย้อนหลังรายห้อง</h2>
+        <div className="form-row">
+          <label htmlFor="history-room">เลือกห้อง</label>
+          <select id="history-room" value={historyRoomId} onChange={(event) => setHistoryRoomId(event.target.value)}>
+            {ROOMS.map((room) => (
+              <option key={room.id} value={room.id}>
+                {room.id}
+              </option>
+            ))}
+          </select>
+        </div>
+        {roomHistory.length === 0 ? <p>ยังไม่มีประวัติบิลของห้องนี้</p> : null}
+        {roomHistory.length > 0 ? (
+          <div className="table-wrap">
+            <table className="report-table">
+              <thead>
+                <tr>
+                  <th>เดือนค่าเช่า</th>
+                  <th>ประเภท</th>
+                  <th>ค่าไฟ</th>
+                  <th>รวมทั้งสิ้น</th>
+                  <th>ออกบิลเมื่อ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {roomHistory.map((bill) => (
+                  <tr key={bill.id}>
+                    <td>{bill.billingMonthLabel}</td>
+                    <td>{bill.mode === 'prepaid' ? 'ล่วงหน้า' : 'เดือนปัจจุบัน'}</td>
+                    <td>{formatCurrency(bill.electricAmount)}</td>
+                    <td>{formatCurrency(bill.totalAmount)}</td>
+                    <td>{new Date(bill.issuedAtISO).toLocaleDateString('th-TH')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="panel">
+        <h2>รายงานยอดรวมทั้งหอรายเดือน</h2>
+        {monthlyReport.length === 0 ? <p>ยังไม่มีข้อมูลสรุปรายเดือน</p> : null}
+        {monthlyReport.length > 0 ? (
+          <div className="table-wrap">
+            <table className="report-table">
+              <thead>
+                <tr>
+                  <th>เดือน</th>
+                  <th>จำนวนบิล</th>
+                  <th>รวมค่าเช่า</th>
+                  <th>รวมค่าไฟ</th>
+                  <th>ยอดรวมทั้งหมด</th>
+                </tr>
+              </thead>
+              <tbody>
+                {monthlyReport.map((row) => (
+                  <tr key={row.billingMonthKey}>
+                    <td>{row.billingMonthLabel}</td>
+                    <td>{row.billCount}</td>
+                    <td>{formatCurrency(row.rentTotal)}</td>
+                    <td>{formatCurrency(row.electricTotal)}</td>
+                    <td>{formatCurrency(row.grandTotal)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="hidden-bills" aria-hidden>
+        {Object.values(billsByRoom).map((bill) => (
+          <BillDocument
+            key={bill.id}
+            bill={bill}
+            ref={(node) => {
+              billRefs.current[bill.roomId] = node
+            }}
+          />
+        ))}
+      </section>
+    </main>
+  )
+}
