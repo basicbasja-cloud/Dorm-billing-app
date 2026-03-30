@@ -17,6 +17,14 @@ export function HomePage() {
           <Link to="/owner" className="btn btn-secondary">
             เข้าสู่โหมดเจ้าของหอ
           </Link>
+          <a
+            className="btn btn-ghost"
+            href="https://maps.app.goo.gl/LfnFiuw8VZrc93tb7"
+            target="_blank"
+            rel="noreferrer"
+          >
+            เปิดแผนที่หอพัก
+          </a>
         </div>
       </section>
 
