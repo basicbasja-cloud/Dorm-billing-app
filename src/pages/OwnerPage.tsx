@@ -9,6 +9,7 @@ import {
   saveBill,
   summarizeMonthlyRevenue,
 } from '../lib/storage'
+import { supabase } from '../lib/supabase'
 import { formatCurrency } from '../utils/billing'
 import { createBill } from '../utils/billing'
 import type { BillRecord, BillsByRoom, BillingMode } from '../types'
@@ -39,6 +40,9 @@ function createInitialDrafts(latestBills: BillsByRoom = {}): Record<string, Mete
 export function OwnerPage() {
   const [pin, setPin] = useState('')
   const [isAuthorized, setIsAuthorized] = useState(sessionStorage.getItem('owner_access') === 'ok')
+  const [ownerEmail, setOwnerEmail] = useState('')
+  const [ownerPassword, setOwnerPassword] = useState('')
+  const [isSigningIn, setIsSigningIn] = useState(false)
   const [billsByRoom, setBillsByRoom] = useState<BillsByRoom>({})
   const [drafts, setDrafts] = useState<Record<string, MeterDraft>>(() => createInitialDrafts())
   const [selectedRoomId, setSelectedRoomId] = useState(ROOMS[0].id)
@@ -68,11 +72,50 @@ export function OwnerPage() {
   const roomHistory = useMemo(() => getRoomHistoryFromBills(allBills, historyRoomId), [allBills, historyRoomId])
   const monthlyReport = useMemo(() => summarizeMonthlyRevenue(allBills), [allBills])
 
-  function authorizeOwner(event: FormEvent) {
+  async function authorizeOwner(event: FormEvent) {
     event.preventDefault()
+
+    if (isSigningIn) {
+      return
+    }
+
     if (pin !== OWNER_PIN) {
       setError('PIN ไม่ถูกต้อง')
       return
+    }
+
+    if (supabase) {
+      if (!ownerEmail || !ownerPassword) {
+        setError('กรุณากรอกอีเมลและรหัสผ่านเจ้าของหอ เพื่อบันทึกข้อมูลข้ามอุปกรณ์')
+        return
+      }
+
+      try {
+        setIsSigningIn(true)
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email: ownerEmail,
+          password: ownerPassword,
+        })
+
+        if (signInError || !data.user) {
+          throw new Error(signInError?.message ?? 'เข้าสู่ระบบ Supabase ไม่สำเร็จ')
+        }
+
+        const { data: ownerProfile, error: ownerProfileError } = await supabase
+          .from('owner_profiles')
+          .select('user_id')
+          .eq('user_id', data.user.id)
+          .maybeSingle()
+
+        if (ownerProfileError || !ownerProfile) {
+          throw new Error('บัญชีนี้ยังไม่ถูกกำหนดสิทธิ์ owner ในตาราง owner_profiles')
+        }
+      } catch (authError) {
+        setError(authError instanceof Error ? authError.message : 'เข้าสู่ระบบเจ้าของหอไม่สำเร็จ')
+        return
+      } finally {
+        setIsSigningIn(false)
+      }
     }
 
     sessionStorage.setItem('owner_access', 'ok')
@@ -200,7 +243,8 @@ export function OwnerPage() {
         <section className="panel owner-gate">
           <h1>เฉพาะเจ้าของหอ</h1>
           <p>กรอก PIN เพื่อเข้าหน้าออกบิล</p>
-          <form onSubmit={authorizeOwner} className="pin-form">
+          {supabase ? <p className="panel-description">ถ้าต้องการให้ข้อมูลซิงก์ข้ามอุปกรณ์ กรุณาล็อกอิน Supabase owner ด้วย</p> : null}
+          <form onSubmit={(event) => void authorizeOwner(event)} className="pin-form">
             <input
               type="password"
               inputMode="numeric"
@@ -208,8 +252,24 @@ export function OwnerPage() {
               onChange={(event) => setPin(event.target.value)}
               placeholder="Owner PIN"
             />
+            {supabase ? (
+              <>
+                <input
+                  type="email"
+                  value={ownerEmail}
+                  onChange={(event) => setOwnerEmail(event.target.value)}
+                  placeholder="Owner email (Supabase Auth)"
+                />
+                <input
+                  type="password"
+                  value={ownerPassword}
+                  onChange={(event) => setOwnerPassword(event.target.value)}
+                  placeholder="Owner password"
+                />
+              </>
+            ) : null}
             <button className="btn btn-primary" type="submit">
-              เข้าสู่ระบบ
+              {isSigningIn ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
             </button>
           </form>
           {error ? <p className="error-text">{error}</p> : null}
