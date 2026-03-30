@@ -48,6 +48,7 @@ export function OwnerPage() {
   const [historyRoomId, setHistoryRoomId] = useState(ROOMS[0].id)
 
   const billRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const latestBillPanelRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     void (async () => {
@@ -162,6 +163,13 @@ export function OwnerPage() {
     }
 
     setSuccess('เซฟบิลทั้งหมดเรียบร้อย')
+  }
+
+  function viewBill(roomId: string) {
+    setSelectedRoomId(roomId)
+    requestAnimationFrame(() => {
+      latestBillPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
   }
 
   async function clearAllData() {
@@ -286,7 +294,7 @@ export function OwnerPage() {
                   <button className="btn btn-secondary" onClick={() => void saveRoomBill(room.id)} disabled={!hasIssued}>
                     เซฟ PNG
                   </button>
-                  <button className="btn btn-ghost" onClick={() => setSelectedRoomId(room.id)} disabled={!hasIssued}>
+                  <button className="btn btn-ghost" onClick={() => viewBill(room.id)} disabled={!hasIssued}>
                     ดูบิล
                   </button>
                 </div>
@@ -296,7 +304,7 @@ export function OwnerPage() {
         </div>
       </section>
 
-      <section className="panel bill-panel">
+      <section className="panel bill-panel" ref={latestBillPanelRef}>
         <h2>ตัวอย่างบิลล่าสุด</h2>
         {selectedBill ? <BillDocument bill={selectedBill} /> : <p>ยังไม่มีบิลที่ออกแล้ว</p>}
       </section>
