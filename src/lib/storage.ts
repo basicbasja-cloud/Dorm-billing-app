@@ -186,7 +186,8 @@ export async function getLatestBills(): Promise<BillsByRoom> {
 
 export async function saveBill(bill: BillRecord): Promise<void> {
   const currentBills = getLocalBills()
-  setLocalBills([...currentBills, bill])
+  const nextBills = [...currentBills, bill]
+  setLocalBills(nextBills)
 
   if (!supabase) {
     return
@@ -212,7 +213,14 @@ export async function saveBill(bill: BillRecord): Promise<void> {
   })
 
   if (error) {
-    console.warn('Supabase insert failed; using local fallback only:', error.message)
+    // Roll back local cache to avoid showing success while remote history is missing.
+    setLocalBills(currentBills)
+
+    if (error.message.toLowerCase().includes('row-level security')) {
+      throw new Error('บันทึกบิลไม่สำเร็จ: ไม่มีสิทธิ์เขียนข้อมูล (RLS) กรุณาตรวจ owner_profiles และ policy ใน Supabase')
+    }
+
+    throw new Error(`บันทึกบิลไม่สำเร็จ: ${error.message}`)
   }
 }
 
