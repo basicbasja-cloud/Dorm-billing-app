@@ -256,6 +256,51 @@ select {
   margin-top: 16px;
 }
 
+.pin-display {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(42px, 56px));
+  gap: 8px;
+}
+
+.pin-slot {
+  height: 50px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  font-size: 1.3rem;
+  color: var(--text);
+}
+
+.pin-slot.filled {
+  border-color: #efc9a6;
+}
+
+.pin-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(64px, 1fr));
+  gap: 8px;
+  max-width: 320px;
+}
+
+.pin-key {
+  min-height: 50px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pin-key-action {
+  color: var(--teal);
+  background: var(--bg-soft);
+}
+
 .room-grid {
   margin-top: 16px;
   display: grid;

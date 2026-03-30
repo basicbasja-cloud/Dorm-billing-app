@@ -22,6 +22,7 @@ interface MeterDraft {
 }
 
 const OWNER_PIN = import.meta.env.VITE_OWNER_PIN ?? '123789'
+const OWNER_PIN_LENGTH = OWNER_PIN.length
 
 function createInitialDrafts(latestBills: BillsByRoom = {}): Record<string, MeterDraft> {
   return ROOMS.reduce<Record<string, MeterDraft>>((acc, room) => {
@@ -102,6 +103,26 @@ export function OwnerPage() {
 
   const roomHistory = useMemo(() => getRoomHistoryFromBills(allBills, historyRoomId), [allBills, historyRoomId])
   const monthlyReport = useMemo(() => summarizeMonthlyRevenue(allBills), [allBills])
+
+  function appendPinDigit(digit: string) {
+    setPin((current) => {
+      if (current.length >= OWNER_PIN_LENGTH) {
+        return current
+      }
+      return `${current}${digit}`
+    })
+    setError('')
+  }
+
+  function removePinDigit() {
+    setPin((current) => current.slice(0, -1))
+    setError('')
+  }
+
+  function clearPin() {
+    setPin('')
+    setError('')
+  }
 
   async function authorizeOwner(event: FormEvent) {
     event.preventDefault()
@@ -331,13 +352,51 @@ export function OwnerPage() {
             </p>
           ) : null}
           <form onSubmit={(event) => void authorizeOwner(event)} className="pin-form">
-            <input
-              type="password"
-              inputMode="numeric"
-              value={pin}
-              onChange={(event) => setPin(event.target.value)}
-              placeholder="Owner PIN"
-            />
+            <div className="pin-display" role="group" aria-label="รหัส PIN เจ้าของหอ">
+              {Array.from({ length: OWNER_PIN_LENGTH }).map((_, index) => (
+                <span key={index} className={`pin-slot ${pin[index] ? 'filled' : ''}`}>
+                  {pin[index] ? '•' : ''}
+                </span>
+              ))}
+            </div>
+
+            <div className="pin-keypad" role="group" aria-label="แป้นกดรหัส PIN">
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+                <button
+                  key={digit}
+                  type="button"
+                  className="pin-key"
+                  onClick={() => appendPinDigit(digit)}
+                  disabled={isSigningIn || isCheckingOwnerSession}
+                >
+                  {digit}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="pin-key pin-key-action"
+                onClick={clearPin}
+                disabled={isSigningIn || isCheckingOwnerSession}
+              >
+                ล้าง
+              </button>
+              <button
+                type="button"
+                className="pin-key"
+                onClick={() => appendPinDigit('0')}
+                disabled={isSigningIn || isCheckingOwnerSession}
+              >
+                0
+              </button>
+              <button
+                type="button"
+                className="pin-key pin-key-action"
+                onClick={removePinDigit}
+                disabled={isSigningIn || isCheckingOwnerSession}
+              >
+                ลบ
+              </button>
+            </div>
             {supabase && !hasOwnerSupabaseSession ? (
               <>
                 <input
