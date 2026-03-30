@@ -41,6 +41,13 @@ alter table public.owner_profiles enable row level security;
 
 drop policy if exists "public read bills" on public.bills;
 drop policy if exists "public insert bills" on public.bills;
+drop policy if exists "tenant read own profile" on public.tenant_profiles;
+drop policy if exists "tenant insert own profile" on public.tenant_profiles;
+drop policy if exists "owner read own profile" on public.owner_profiles;
+drop policy if exists "tenant read own room bills" on public.bills;
+drop policy if exists "owner read all bills" on public.bills;
+drop policy if exists "owner insert bills" on public.bills;
+drop policy if exists "owner delete bills" on public.bills;
 
 create policy "tenant read own profile"
 on public.tenant_profiles
