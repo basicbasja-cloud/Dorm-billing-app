@@ -215,6 +215,20 @@ export function OwnerPage() {
     })
   }
 
+  async function signOutOwner() {
+    sessionStorage.removeItem('owner_access')
+
+    if (supabase) {
+      await supabase.auth.signOut()
+    }
+
+    setIsAuthorized(false)
+    setPin('')
+    setOwnerPassword('')
+    setError('')
+    setSuccess('')
+  }
+
   async function clearAllData() {
     const shouldClear = window.confirm('ยืนยันล้างข้อมูลบิลทั้งหมด? การดำเนินการนี้ย้อนกลับไม่ได้')
     if (!shouldClear) {
@@ -289,6 +303,9 @@ export function OwnerPage() {
             </button>
             <button className="btn btn-danger" onClick={() => void clearAllData()}>
               ล้างข้อมูลทั้งหมด
+            </button>
+            <button className="btn btn-ghost" onClick={() => void signOutOwner()}>
+              ออกจากระบบ
             </button>
           </div>
         </div>
