@@ -16,11 +16,14 @@ interface MeterDraft {
 
 const OWNER_PIN = import.meta.env.VITE_OWNER_PIN ?? '123789'
 
-function createInitialDrafts(): Record<string, MeterDraft> {
+function createInitialDrafts(latestBills: BillsByRoom = {}): Record<string, MeterDraft> {
   return ROOMS.reduce<Record<string, MeterDraft>>((acc, room) => {
+    const latestBill = latestBills[room.id]
+    const initialMeter = latestBill?.meterAfter ?? 0
+
     acc[room.id] = {
-      meterBefore: 0,
-      meterAfter: 0,
+      meterBefore: initialMeter,
+      meterAfter: initialMeter,
       mode: 'postpaid',
     }
     return acc
@@ -44,6 +47,7 @@ export function OwnerPage() {
     void (async () => {
       const latest = await getLatestBills()
       setBillsByRoom(latest)
+      setDrafts(createInitialDrafts(latest))
       const all = await getAllBills()
       setAllBills(all)
     })()
@@ -105,6 +109,14 @@ export function OwnerPage() {
       await saveBill(bill)
       setBillsByRoom((current) => ({ ...current, [roomId]: bill }))
       setAllBills((current) => [bill, ...current])
+      setDrafts((current) => ({
+        ...current,
+        [roomId]: {
+          ...current[roomId],
+          meterBefore: bill.meterAfter,
+          meterAfter: bill.meterAfter,
+        },
+      }))
       setSelectedRoomId(roomId)
       setSuccess(`ออกบิลห้อง ${roomId} เรียบร้อย`)
     } catch (issueError) {
@@ -181,14 +193,15 @@ export function OwnerPage() {
           </button>
         </div>
 
-        <p className="panel-description">ใส่เลขมิเตอร์ก่อนและหลัง แล้วเลือกประเภทการชำระก่อนออกบิล</p>
+        <p className="panel-description">ใส่เลขมิเตอร์หลังและตรวจสอบเลขมิเตอร์ก่อนก่อนออกบิล ระบบจะดึงเลขไฟก่อนจากบิลล่าสุดให้อัตโนมัติหลังจากเริ่มใช้งานครั้งแรก แต่เจ้าของหอยังแก้ไขเองได้</p>
         {error ? <p className="error-text">{error}</p> : null}
         {success ? <p className="status-text success">{success}</p> : null}
 
         <div className="room-grid">
           {ROOMS.map((room) => {
             const draft = drafts[room.id] ?? { meterBefore: 0, meterAfter: 0, mode: 'postpaid' as BillingMode }
-            const hasIssued = Boolean(billsByRoom[room.id])
+            const latestBill = billsByRoom[room.id]
+            const hasIssued = Boolean(latestBill)
 
             return (
               <article key={room.id} className="room-card">
@@ -206,6 +219,12 @@ export function OwnerPage() {
                     onChange={(event) => updateDraft(room.id, { meterBefore: Number(event.target.value) })}
                   />
                 </label>
+
+                <p className="field-hint">
+                  {latestBill
+                    ? `ดึงจากเลขไฟหลังล่าสุด ${latestBill.meterAfter.toLocaleString('th-TH')} อัตโนมัติ และยังแก้เองได้`
+                    : 'ห้องนี้ยังไม่มีบิลเดิม กรุณากรอกเลขไฟก่อนเองครั้งแรก'}
+                </p>
 
                 <label>
                   เลขไฟหลัง

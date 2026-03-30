@@ -287,6 +287,12 @@ select {
   color: var(--danger);
 }
 
+.field-hint {
+  margin-top: -2px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
 .bill-panel h2 {
   margin-bottom: 12px;
 }
