@@ -256,6 +256,11 @@ select {
   margin-top: 16px;
 }
 
+.pin-form h2 {
+  margin: 2px 0 4px;
+  font-size: 1.1rem;
+}
+
 .pin-display {
   display: grid;
   grid-template-columns: repeat(4, minmax(42px, 56px));

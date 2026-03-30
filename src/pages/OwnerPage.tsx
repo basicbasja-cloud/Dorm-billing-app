@@ -46,6 +46,7 @@ export function OwnerPage() {
   const [isSigningIn, setIsSigningIn] = useState(false)
   const [hasOwnerSupabaseSession, setHasOwnerSupabaseSession] = useState(false)
   const [isCheckingOwnerSession, setIsCheckingOwnerSession] = useState(Boolean(supabase))
+  const [gateStep, setGateStep] = useState<'credentials' | 'pin'>(supabase ? 'credentials' : 'pin')
   const [tenantAccountRoomId, setTenantAccountRoomId] = useState(ROOMS[0].id)
   const [isDeletingTenantAccount, setIsDeletingTenantAccount] = useState(false)
   const [billsByRoom, setBillsByRoom] = useState<BillsByRoom>({})
@@ -73,6 +74,7 @@ export function OwnerPage() {
     if (!supabase) {
       setIsCheckingOwnerSession(false)
       setHasOwnerSupabaseSession(false)
+      setGateStep('pin')
       return
     }
 
@@ -81,6 +83,7 @@ export function OwnerPage() {
       const { data, error } = await supabase.auth.getUser()
       if (error || !data.user) {
         setHasOwnerSupabaseSession(false)
+        setGateStep('credentials')
         setIsCheckingOwnerSession(false)
         return
       }
@@ -91,7 +94,9 @@ export function OwnerPage() {
         .eq('user_id', data.user.id)
         .maybeSingle()
 
-      setHasOwnerSupabaseSession(Boolean(ownerProfile) && !ownerProfileError)
+      const hasSession = Boolean(ownerProfile) && !ownerProfileError
+      setHasOwnerSupabaseSession(hasSession)
+      setGateStep(hasSession ? 'pin' : 'credentials')
       setIsCheckingOwnerSession(false)
     })()
   }, [])
@@ -124,52 +129,66 @@ export function OwnerPage() {
     setError('')
   }
 
-  async function authorizeOwner(event: FormEvent) {
+  async function proceedWithOwnerCredentials(event: FormEvent) {
     event.preventDefault()
 
     if (isSigningIn) {
       return
     }
 
-    if (pin !== OWNER_PIN) {
-      setError('PIN ไม่ถูกต้อง')
+    if (!supabase) {
+      setGateStep('pin')
+      setError('')
       return
     }
 
-    if (supabase && !hasOwnerSupabaseSession) {
-      if (!ownerEmail || !ownerPassword) {
-        setError('กรุณากรอกอีเมลและรหัสผ่านเจ้าของหอ (ครั้งแรก) เพื่อผูกเครื่องนี้กับบัญชีเจ้าของหอ')
-        return
+    if (!ownerEmail || !ownerPassword) {
+      setError('กรุณากรอกอีเมลและรหัสผ่านเจ้าของหอ')
+      return
+    }
+
+    try {
+      setIsSigningIn(true)
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: ownerEmail,
+        password: ownerPassword,
+      })
+
+      if (signInError || !data.user) {
+        throw new Error(signInError?.message ?? 'เข้าสู่ระบบ Supabase ไม่สำเร็จ')
       }
 
-      try {
-        setIsSigningIn(true)
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({
-          email: ownerEmail,
-          password: ownerPassword,
-        })
+      const { data: ownerProfile, error: ownerProfileError } = await supabase
+        .from('owner_profiles')
+        .select('user_id')
+        .eq('user_id', data.user.id)
+        .maybeSingle()
 
-        if (signInError || !data.user) {
-          throw new Error(signInError?.message ?? 'เข้าสู่ระบบ Supabase ไม่สำเร็จ')
-        }
-
-        const { data: ownerProfile, error: ownerProfileError } = await supabase
-          .from('owner_profiles')
-          .select('user_id')
-          .eq('user_id', data.user.id)
-          .maybeSingle()
-
-        if (ownerProfileError || !ownerProfile) {
-          throw new Error('บัญชีนี้ยังไม่ถูกกำหนดสิทธิ์ owner ในตาราง owner_profiles')
-        }
-
-        setHasOwnerSupabaseSession(true)
-      } catch (authError) {
-        setError(authError instanceof Error ? authError.message : 'เข้าสู่ระบบเจ้าของหอไม่สำเร็จ')
-        return
-      } finally {
-        setIsSigningIn(false)
+      if (ownerProfileError || !ownerProfile) {
+        throw new Error('บัญชีนี้ยังไม่ถูกกำหนดสิทธิ์ owner ในตาราง owner_profiles')
       }
+
+      setHasOwnerSupabaseSession(true)
+      setGateStep('pin')
+      setOwnerPassword('')
+      setError('')
+    } catch (authError) {
+      setError(authError instanceof Error ? authError.message : 'เข้าสู่ระบบเจ้าของหอไม่สำเร็จ')
+    } finally {
+      setIsSigningIn(false)
+    }
+  }
+
+  async function authorizeOwner(event: FormEvent) {
+    event.preventDefault()
+
+    if (isSigningIn || gateStep !== 'pin') {
+      return
+    }
+
+    if (pin !== OWNER_PIN) {
+      setError('PIN ไม่ถูกต้อง')
+      return
     }
 
     sessionStorage.setItem('owner_access', 'ok')
@@ -277,6 +296,7 @@ export function OwnerPage() {
     }
 
     setHasOwnerSupabaseSession(false)
+    setGateStep(supabase ? 'credentials' : 'pin')
     setIsAuthorized(false)
     setPin('')
     setOwnerEmail('')
@@ -347,58 +367,17 @@ export function OwnerPage() {
               {isCheckingOwnerSession
                 ? 'กำลังตรวจสอบบัญชีเจ้าของหอในเครื่องนี้...'
                 : hasOwnerSupabaseSession
-                  ? 'เครื่องนี้ผูกบัญชีเจ้าของหอแล้ว ใช้แค่ PIN ได้เลย'
-                  : 'ครั้งแรกให้กรอกอีเมล/รหัสผ่านเจ้าของหอเพื่อผูกเครื่องนี้ หลังจากนั้นใช้แค่ PIN'}
+                  ? 'เครื่องนี้ผูกบัญชีเจ้าของหอแล้ว'
+                  : 'กรอกอีเมล/รหัสผ่านเจ้าของหอ แล้วดำเนินการต่อเพื่อไปขั้นตอน PIN'}
             </p>
           ) : null}
-          <form onSubmit={(event) => void authorizeOwner(event)} className="pin-form">
-            <div className="pin-display" role="group" aria-label="รหัส PIN เจ้าของหอ">
-              {Array.from({ length: OWNER_PIN_LENGTH }).map((_, index) => (
-                <span key={index} className={`pin-slot ${pin[index] ? 'filled' : ''}`}>
-                  {pin[index] ? '•' : ''}
-                </span>
-              ))}
-            </div>
-
-            <div className="pin-keypad" role="group" aria-label="แป้นกดรหัส PIN">
-              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
-                <button
-                  key={digit}
-                  type="button"
-                  className="pin-key"
-                  onClick={() => appendPinDigit(digit)}
-                  disabled={isSigningIn || isCheckingOwnerSession}
-                >
-                  {digit}
-                </button>
-              ))}
-              <button
-                type="button"
-                className="pin-key pin-key-action"
-                onClick={clearPin}
-                disabled={isSigningIn || isCheckingOwnerSession}
-              >
-                ล้าง
-              </button>
-              <button
-                type="button"
-                className="pin-key"
-                onClick={() => appendPinDigit('0')}
-                disabled={isSigningIn || isCheckingOwnerSession}
-              >
-                0
-              </button>
-              <button
-                type="button"
-                className="pin-key pin-key-action"
-                onClick={removePinDigit}
-                disabled={isSigningIn || isCheckingOwnerSession}
-              >
-                ลบ
-              </button>
-            </div>
-            {supabase && !hasOwnerSupabaseSession ? (
+          <form
+            onSubmit={(event) => void (gateStep === 'credentials' ? proceedWithOwnerCredentials(event) : authorizeOwner(event))}
+            className="pin-form"
+          >
+            {gateStep === 'credentials' ? (
               <>
+                <h2>ขั้นตอนที่ 1: ยืนยันบัญชีเจ้าของหอ</h2>
                 <input
                   type="email"
                   value={ownerEmail}
@@ -413,11 +392,70 @@ export function OwnerPage() {
                   placeholder="Owner password"
                   disabled={isSigningIn || isCheckingOwnerSession}
                 />
+                <button className="btn btn-primary" type="submit" disabled={isSigningIn || isCheckingOwnerSession}>
+                  {isSigningIn ? 'กำลังตรวจสอบ...' : 'ดำเนินการต่อ'}
+                </button>
               </>
-            ) : null}
-            <button className="btn btn-primary" type="submit" disabled={isSigningIn || isCheckingOwnerSession}>
-              {isSigningIn ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
-            </button>
+            ) : (
+              <>
+                <h2>ขั้นตอนที่ 2: ใส่ PIN</h2>
+                <div className="pin-display" role="group" aria-label="รหัส PIN เจ้าของหอ">
+                  {Array.from({ length: OWNER_PIN_LENGTH }).map((_, index) => (
+                    <span key={index} className={`pin-slot ${pin[index] ? 'filled' : ''}`}>
+                      {pin[index] ? '•' : ''}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="pin-keypad" role="group" aria-label="แป้นกดรหัส PIN">
+                  {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+                    <button
+                      key={digit}
+                      type="button"
+                      className="pin-key"
+                      onClick={() => appendPinDigit(digit)}
+                      disabled={isSigningIn || isCheckingOwnerSession}
+                    >
+                      {digit}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="pin-key pin-key-action"
+                    onClick={clearPin}
+                    disabled={isSigningIn || isCheckingOwnerSession}
+                  >
+                    ล้าง
+                  </button>
+                  <button
+                    type="button"
+                    className="pin-key"
+                    onClick={() => appendPinDigit('0')}
+                    disabled={isSigningIn || isCheckingOwnerSession}
+                  >
+                    0
+                  </button>
+                  <button
+                    type="button"
+                    className="pin-key pin-key-action"
+                    onClick={removePinDigit}
+                    disabled={isSigningIn || isCheckingOwnerSession}
+                  >
+                    ลบ
+                  </button>
+                </div>
+
+                {supabase && !hasOwnerSupabaseSession ? (
+                  <button className="btn btn-secondary" type="button" onClick={() => setGateStep('credentials')}>
+                    กลับไปแก้เมล/รหัสผ่าน
+                  </button>
+                ) : null}
+
+                <button className="btn btn-primary" type="submit" disabled={isSigningIn || isCheckingOwnerSession}>
+                  เข้าสู่ระบบ
+                </button>
+              </>
+            )}
           </form>
           {error ? <p className="error-text">{error}</p> : null}
         </section>
