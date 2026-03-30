@@ -44,8 +44,8 @@ cp .env.example .env
 ```env
 VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-VITE_OWNER_PIN=2468
-VITE_TENANT_SETUP_KEY=somjai1234
+VITE_OWNER_PIN=your_owner_pin
+VITE_TENANT_SETUP_KEY=your_tenant_setup_key
 ```
 
 ถ้าไม่ใส่ค่า Supabase ระบบจะเก็บข้อมูลใน localStorage แทน (เหมาะกับโหมดทดลอง)
@@ -91,7 +91,7 @@ npm run preview
 1. เข้า Cloudflare Dashboard
 2. ไปที่ `Workers & Pages`
 3. กด `Create` > `Pages` > `Connect to Git`
-4. เลือก GitHub repository: `basicbasja-cloud/Dorm-billing-app`
+4. เลือก GitHub repository ของคุณ
 5. ตั้งค่า build ดังนี้
 
 ```txt
@@ -104,10 +104,10 @@ Root directory: /
 6. เพิ่ม Environment Variables ในหน้า Settings ของโปรเจกต์
 
 ```env
-VITE_SUPABASE_URL=https://euuovmqydddzxybhndqo.supabase.co
+VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_publishable_or_anon_key
-VITE_OWNER_PIN=2468
-VITE_TENANT_SETUP_KEY=somjai1234
+VITE_OWNER_PIN=your_owner_pin
+VITE_TENANT_SETUP_KEY=your_tenant_setup_key
 ```
 
 7. กด Deploy
@@ -121,10 +121,10 @@ VITE_TENANT_SETUP_KEY=somjai1234
 หาได้จาก Supabase Dashboard > Project Settings > API > Project API keys > `anon` หรือ publishable key ที่ใช้กับ browser
 
 3. `VITE_OWNER_PIN`
-คุณเป็นคนกำหนดเองได้เลย เช่น `2468`
+คุณเป็นคนกำหนดเองได้เลย เช่น `owner-1234`
 
 4. `VITE_TENANT_SETUP_KEY`
-คุณเป็นคนกำหนดเองได้เลย ใช้สำหรับลงทะเบียนผู้เช่าครั้งแรก เช่น `somjai1234`
+คุณเป็นคนกำหนดเองได้เลย ใช้สำหรับลงทะเบียนผู้เช่าครั้งแรก เช่น `tenant-setup-2026`
 
 5. ถ้าจะให้ระบบ owner เขียนข้อมูลลง Supabase จริงภายใต้ RLS
 ต้องมี owner user id จาก Supabase Auth
@@ -213,3 +213,5 @@ values ('YOUR_OWNER_USER_UID');
 
 - ตอนนี้หน้าเจ้าของหอใช้ PIN ฝั่ง client เพื่อกันผู้เช่าทั่วไปไม่ให้เข้าถึง
 - สำหรับ production แนะนำเพิ่ม Supabase Auth + Row Level Security ตาม role เพื่อบังคับสิทธิ์จริง
+- ห้าม commit ค่าใน `.env` หรือ `.env.local` ขึ้น repo สาธารณะ
+- ถ้าเผลอเผยแพร่ key/PIN/setup key ให้ rotate หรือเปลี่ยนค่าใหม่ทันที
