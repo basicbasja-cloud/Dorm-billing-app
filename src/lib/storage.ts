@@ -215,3 +215,16 @@ export async function saveBill(bill: BillRecord): Promise<void> {
     console.warn('Supabase insert failed; using local fallback only:', error.message)
   }
 }
+
+export async function clearAllBills(): Promise<void> {
+  setLocalBills([])
+
+  if (!supabase) {
+    return
+  }
+
+  const { error } = await supabase.from('bills').delete().not('id', 'is', null)
+  if (error) {
+    throw new Error(`ลบข้อมูลบน Supabase ไม่สำเร็จ: ${error.message}`)
+  }
+}

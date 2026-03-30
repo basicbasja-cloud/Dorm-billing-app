@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { toPng } from 'html-to-image'
-import { saveAs } from 'file-saver'
 import { BillDocument } from '../components/BillDocument'
 import { ROOM_IDS } from '../data/rooms'
 import {
@@ -13,11 +11,13 @@ import {
 } from '../lib/auth'
 import { getBillsByRoom } from '../lib/storage'
 import type { BillRecord } from '../types'
+import { saveNodeAsPng } from '../utils/png'
 
 export function TenantPage() {
   const [identity, setIdentity] = useState<TenantIdentity | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string>('')
+  const [notice, setNotice] = useState<string>('')
   const [authRoomId, setAuthRoomId] = useState<string>(ROOM_IDS[0])
   const [password, setPassword] = useState('')
   const [setupKey, setSetupKey] = useState('')
@@ -107,17 +107,21 @@ export function TenantPage() {
   }
 
   async function saveBillAsPng() {
+    setError('')
+    setNotice('')
+
     if (!billRef.current || !bill) {
       return
     }
 
-    const image = await toPng(billRef.current, {
-      cacheBust: true,
-      pixelRatio: 2,
-      backgroundColor: '#fffef8',
-    })
-
-    saveAs(image, `${bill.roomId}_${bill.billingMonthKey}.png`)
+    try {
+      const result = await saveNodeAsPng(billRef.current, `${bill.roomId}_${bill.billingMonthKey}.png`)
+      if (result === 'preview') {
+        setNotice('มือถือบางรุ่นจะไม่ดาวน์โหลดอัตโนมัติ ระบบเปิดรูปให้แล้ว กรุณากดค้างที่รูปแล้วเลือกบันทึกภาพ')
+      }
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'เซฟ PNG ไม่สำเร็จ')
+    }
   }
 
   return (
@@ -131,6 +135,7 @@ export function TenantPage() {
           <p className="status-text warning">ยังไม่ได้ตั้งค่า Supabase จึงไม่สามารถล็อกอินผู้เช่าแบบแยกห้องได้</p>
         ) : null}
         {error ? <p className="error-text">{error}</p> : null}
+        {notice ? <p className="status-text warning">{notice}</p> : null}
 
         {!identity && canUseTenantAuth() ? (
           <div className="tenant-auth-box">

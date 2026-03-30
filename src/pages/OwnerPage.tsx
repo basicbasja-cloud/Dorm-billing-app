@@ -1,12 +1,18 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { toPng } from 'html-to-image'
-import { saveAs } from 'file-saver'
 import { BillDocument } from '../components/BillDocument'
 import { ROOMS } from '../data/rooms'
-import { getAllBills, getLatestBills, getRoomHistoryFromBills, saveBill, summarizeMonthlyRevenue } from '../lib/storage'
+import {
+  clearAllBills,
+  getAllBills,
+  getLatestBills,
+  getRoomHistoryFromBills,
+  saveBill,
+  summarizeMonthlyRevenue,
+} from '../lib/storage'
 import { formatCurrency } from '../utils/billing'
 import { createBill } from '../utils/billing'
 import type { BillRecord, BillsByRoom, BillingMode } from '../types'
+import { saveNodeAsPng } from '../utils/png'
 
 interface MeterDraft {
   meterBefore: number
@@ -124,7 +130,7 @@ export function OwnerPage() {
     }
   }
 
-  async function saveRoomBill(roomId: string) {
+  async function saveRoomBill(roomId: string, openPreviewOnMobile = true) {
     const bill = billsByRoom[roomId]
     const node = billRefs.current[roomId]
 
@@ -133,13 +139,12 @@ export function OwnerPage() {
       return
     }
 
-    const image = await toPng(node, {
-      cacheBust: true,
-      pixelRatio: 2,
-      backgroundColor: '#fffef8',
+    const result = await saveNodeAsPng(node, `${bill.roomId}_${bill.billingMonthKey}.png`, {
+      openPreviewOnMobile,
     })
-
-    saveAs(image, `${bill.roomId}_${bill.billingMonthKey}.png`)
+    if (result === 'preview') {
+      setSuccess('มือถือบางรุ่นจะไม่ดาวน์โหลดอัตโนมัติ ระบบเปิดรูปให้แล้ว กรุณากดค้างที่รูปแล้วเลือกบันทึกภาพ')
+    }
   }
 
   async function saveAllBills() {
@@ -152,11 +157,33 @@ export function OwnerPage() {
     }
 
     for (const roomId of issued) {
-      await saveRoomBill(roomId)
+      await saveRoomBill(roomId, false)
       await new Promise((resolve) => setTimeout(resolve, 120))
     }
 
     setSuccess('เซฟบิลทั้งหมดเรียบร้อย')
+  }
+
+  async function clearAllData() {
+    const shouldClear = window.confirm('ยืนยันล้างข้อมูลบิลทั้งหมด? การดำเนินการนี้ย้อนกลับไม่ได้')
+    if (!shouldClear) {
+      return
+    }
+
+    setError('')
+    setSuccess('')
+
+    try {
+      await clearAllBills()
+      setBillsByRoom({})
+      setAllBills([])
+      setDrafts(createInitialDrafts())
+      setSelectedRoomId(ROOMS[0].id)
+      setHistoryRoomId(ROOMS[0].id)
+      setSuccess('ล้างข้อมูลบิลทั้งหมดเรียบร้อย')
+    } catch (clearError) {
+      setError(clearError instanceof Error ? clearError.message : 'ล้างข้อมูลไม่สำเร็จ')
+    }
   }
 
   if (!isAuthorized) {
@@ -188,9 +215,14 @@ export function OwnerPage() {
       <section className="panel">
         <div className="panel-header-row">
           <h1>แดชบอร์ดเจ้าของหอ</h1>
-          <button className="btn btn-secondary" onClick={() => void saveAllBills()}>
-            เซฟทั้งหมด (ทุกห้อง)
-          </button>
+          <div className="header-actions">
+            <button className="btn btn-secondary" onClick={() => void saveAllBills()}>
+              เซฟทั้งหมด (ทุกห้อง)
+            </button>
+            <button className="btn btn-danger" onClick={() => void clearAllData()}>
+              ล้างข้อมูลทั้งหมด
+            </button>
+          </div>
         </div>
 
         <p className="panel-description">ใส่เลขมิเตอร์หลังและตรวจสอบเลขมิเตอร์ก่อนก่อนออกบิล ระบบจะดึงเลขไฟก่อนจากบิลล่าสุดให้อัตโนมัติหลังจากเริ่มใช้งานครั้งแรก แต่เจ้าของหอยังแก้ไขเองได้</p>

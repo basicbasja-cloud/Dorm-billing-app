@@ -86,6 +86,15 @@ with check (
   )
 );
 
+create policy "owner delete bills"
+on public.bills
+for delete
+using (
+  exists (
+    select 1 from public.owner_profiles op where op.user_id = auth.uid()
+  )
+);
+
 create or replace function public.keepalive()
 returns jsonb
 language sql
