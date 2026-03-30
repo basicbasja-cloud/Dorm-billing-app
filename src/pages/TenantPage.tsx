@@ -22,6 +22,7 @@ export function TenantPage() {
   const [password, setPassword] = useState('')
   const [setupKey, setSetupKey] = useState('')
   const [authMode, setAuthMode] = useState<'signin' | 'register'>('signin')
+  const [isAuthSubmitting, setIsAuthSubmitting] = useState(false)
   const [history, setHistory] = useState<BillRecord[]>([])
   const [selectedBillId, setSelectedBillId] = useState<string>('')
   const billRef = useRef<HTMLDivElement>(null)
@@ -59,6 +60,10 @@ export function TenantPage() {
   }
 
   async function handleTenantSignIn() {
+    if (isAuthSubmitting) {
+      return
+    }
+
     setError('')
     if (!password) {
       setError('กรุณากรอกรหัสผ่าน')
@@ -66,16 +71,23 @@ export function TenantPage() {
     }
 
     try {
+      setIsAuthSubmitting(true)
       const tenant = await signInTenant(authRoomId, password)
       setIdentity(tenant)
       await refreshRoomBills(tenant.roomId)
       setPassword('')
     } catch (authError) {
       setError(authError instanceof Error ? authError.message : 'เข้าสู่ระบบไม่สำเร็จ')
+    } finally {
+      setIsAuthSubmitting(false)
     }
   }
 
   async function handleTenantRegister() {
+    if (isAuthSubmitting) {
+      return
+    }
+
     setError('')
     if (!password || password.length < 6) {
       setError('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร')
@@ -83,6 +95,7 @@ export function TenantPage() {
     }
 
     try {
+      setIsAuthSubmitting(true)
       await registerTenantWithRoom({
         roomId: authRoomId,
         password,
@@ -96,6 +109,8 @@ export function TenantPage() {
       setAuthMode('signin')
     } catch (registerError) {
       setError(registerError instanceof Error ? registerError.message : 'ลงทะเบียนไม่สำเร็จ')
+    } finally {
+      setIsAuthSubmitting(false)
     }
   }
 
@@ -144,6 +159,7 @@ export function TenantPage() {
                 className={`btn ${authMode === 'signin' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setAuthMode('signin')}
                 type="button"
+                disabled={isAuthSubmitting}
               >
                 เข้าสู่ระบบ
               </button>
@@ -151,6 +167,7 @@ export function TenantPage() {
                 className={`btn ${authMode === 'register' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setAuthMode('register')}
                 type="button"
+                disabled={isAuthSubmitting}
               >
                 ลงทะเบียนครั้งแรก
               </button>
@@ -175,6 +192,7 @@ export function TenantPage() {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder="อย่างน้อย 6 ตัวอักษร"
+                disabled={isAuthSubmitting}
               />
             </div>
 
@@ -187,17 +205,18 @@ export function TenantPage() {
                   value={setupKey}
                   onChange={(event) => setSetupKey(event.target.value)}
                   placeholder="รับจากเจ้าของหอ"
+                  disabled={isAuthSubmitting}
                 />
               </div>
             ) : null}
 
             {authMode === 'signin' ? (
-              <button className="btn btn-primary" type="button" onClick={() => void handleTenantSignIn()}>
-                เข้าสู่ระบบผู้เช่า
+              <button className="btn btn-primary" type="button" onClick={() => void handleTenantSignIn()} disabled={isAuthSubmitting}>
+                {isAuthSubmitting ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบผู้เช่า'}
               </button>
             ) : (
-              <button className="btn btn-primary" type="button" onClick={() => void handleTenantRegister()}>
-                สร้างบัญชีห้องนี้
+              <button className="btn btn-primary" type="button" onClick={() => void handleTenantRegister()} disabled={isAuthSubmitting}>
+                {isAuthSubmitting ? 'กำลังลงทะเบียน...' : 'สร้างบัญชีห้องนี้'}
               </button>
             )}
           </div>

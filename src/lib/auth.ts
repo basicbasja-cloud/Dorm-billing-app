@@ -1,7 +1,8 @@
 import { supabase } from './supabase'
 import { ROOM_IDS } from '../data/rooms'
 
-const TENANT_DOMAIN = 'tenant.somjai.local'
+const TENANT_DOMAIN = 'tenant.somjai.app'
+const LEGACY_TENANT_DOMAIN = 'tenant.somjai.local'
 const TENANT_SETUP_KEY = import.meta.env.VITE_TENANT_SETUP_KEY ?? 'somjai1234'
 
 export interface TenantIdentity {
@@ -10,8 +11,8 @@ export interface TenantIdentity {
   email: string
 }
 
-export function roomToTenantEmail(roomId: string): string {
-  return `${roomId.toLowerCase()}@${TENANT_DOMAIN}`
+export function roomToTenantEmail(roomId: string, domain: string = TENANT_DOMAIN): string {
+  return `${roomId.toLowerCase()}@${domain}`
 }
 
 export function canUseTenantAuth(): boolean {
@@ -83,6 +84,10 @@ export async function registerTenantWithRoom(params: {
   })
 
   if (error) {
+    if (error.message.toLowerCase().includes('email rate limit exceeded')) {
+      throw new Error('สมัครบัญชีถี่เกินไปชั่วคราว (email rate limit exceeded) กรุณารอประมาณ 1-5 นาที แล้วลองใหม่อีกครั้ง')
+    }
+
     throw new Error(error.message)
   }
 
@@ -106,11 +111,26 @@ export async function signInTenant(roomId: string, password: string): Promise<Te
     throw new Error('ยังไม่ได้ตั้งค่า Supabase')
   }
 
-  const email = roomToTenantEmail(roomId)
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
+  const primaryEmail = roomToTenantEmail(roomId)
+  let usedEmail = primaryEmail
+  let { data, error } = await supabase.auth.signInWithPassword({
+    email: primaryEmail,
     password,
   })
+
+  if (error || !data.user) {
+    const legacyEmail = roomToTenantEmail(roomId, LEGACY_TENANT_DOMAIN)
+    if (legacyEmail !== primaryEmail) {
+      const legacyResult = await supabase.auth.signInWithPassword({
+        email: legacyEmail,
+        password,
+      })
+
+      data = legacyResult.data
+      error = legacyResult.error
+      usedEmail = legacyEmail
+    }
+  }
 
   if (error || !data.user) {
     throw new Error(error?.message ?? 'เข้าสู่ระบบไม่สำเร็จ')
@@ -128,7 +148,7 @@ export async function signInTenant(roomId: string, password: string): Promise<Te
   return {
     userId: data.user.id,
     roomId: profileRoom,
-    email: data.user.email ?? email,
+    email: data.user.email ?? usedEmail,
   }
 }
 
