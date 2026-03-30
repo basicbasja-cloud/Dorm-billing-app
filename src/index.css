@@ -478,6 +478,11 @@ select {
   padding-left: 18px;
 }
 
+.rules-list li strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
 .hidden-bills {
   position: absolute;
   left: -99999px;
