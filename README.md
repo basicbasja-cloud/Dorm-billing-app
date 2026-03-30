@@ -45,7 +45,7 @@ cp .env.example .env
 VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_OWNER_PIN=2468
-VITE_TENANT_SETUP_KEY=setup-tenant-2026
+VITE_TENANT_SETUP_KEY=somjai1234
 ```
 
 ถ้าไม่ใส่ค่า Supabase ระบบจะเก็บข้อมูลใน localStorage แทน (เหมาะกับโหมดทดลอง)
@@ -107,7 +107,7 @@ Root directory: /
 VITE_SUPABASE_URL=https://euuovmqydddzxybhndqo.supabase.co
 VITE_SUPABASE_ANON_KEY=your_publishable_or_anon_key
 VITE_OWNER_PIN=2468
-VITE_TENANT_SETUP_KEY=setup-tenant-2026
+VITE_TENANT_SETUP_KEY=somjai1234
 ```
 
 7. กด Deploy
@@ -124,7 +124,7 @@ VITE_TENANT_SETUP_KEY=setup-tenant-2026
 คุณเป็นคนกำหนดเองได้เลย เช่น `2468`
 
 4. `VITE_TENANT_SETUP_KEY`
-คุณเป็นคนกำหนดเองได้เลย ใช้สำหรับลงทะเบียนผู้เช่าครั้งแรก เช่น `setup-tenant-2026`
+คุณเป็นคนกำหนดเองได้เลย ใช้สำหรับลงทะเบียนผู้เช่าครั้งแรก เช่น `somjai1234`
 
 5. ถ้าจะให้ระบบ owner เขียนข้อมูลลง Supabase จริงภายใต้ RLS
 ต้องมี owner user id จาก Supabase Auth
