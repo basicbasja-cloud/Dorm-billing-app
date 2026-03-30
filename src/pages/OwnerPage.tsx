@@ -43,6 +43,8 @@ export function OwnerPage() {
   const [ownerEmail, setOwnerEmail] = useState('')
   const [ownerPassword, setOwnerPassword] = useState('')
   const [isSigningIn, setIsSigningIn] = useState(false)
+  const [hasOwnerSupabaseSession, setHasOwnerSupabaseSession] = useState(false)
+  const [isCheckingOwnerSession, setIsCheckingOwnerSession] = useState(Boolean(supabase))
   const [tenantAccountRoomId, setTenantAccountRoomId] = useState(ROOMS[0].id)
   const [isDeletingTenantAccount, setIsDeletingTenantAccount] = useState(false)
   const [billsByRoom, setBillsByRoom] = useState<BillsByRoom>({})
@@ -66,6 +68,33 @@ export function OwnerPage() {
     })()
   }, [])
 
+  useEffect(() => {
+    if (!supabase) {
+      setIsCheckingOwnerSession(false)
+      setHasOwnerSupabaseSession(false)
+      return
+    }
+
+    void (async () => {
+      setIsCheckingOwnerSession(true)
+      const { data, error } = await supabase.auth.getUser()
+      if (error || !data.user) {
+        setHasOwnerSupabaseSession(false)
+        setIsCheckingOwnerSession(false)
+        return
+      }
+
+      const { data: ownerProfile, error: ownerProfileError } = await supabase
+        .from('owner_profiles')
+        .select('user_id')
+        .eq('user_id', data.user.id)
+        .maybeSingle()
+
+      setHasOwnerSupabaseSession(Boolean(ownerProfile) && !ownerProfileError)
+      setIsCheckingOwnerSession(false)
+    })()
+  }, [])
+
   const selectedBill = useMemo<BillRecord | undefined>(
     () => billsByRoom[selectedRoomId],
     [billsByRoom, selectedRoomId],
@@ -86,9 +115,9 @@ export function OwnerPage() {
       return
     }
 
-    if (supabase) {
+    if (supabase && !hasOwnerSupabaseSession) {
       if (!ownerEmail || !ownerPassword) {
-        setError('กรุณากรอกอีเมลและรหัสผ่านเจ้าของหอ เพื่อบันทึกข้อมูลข้ามอุปกรณ์')
+        setError('กรุณากรอกอีเมลและรหัสผ่านเจ้าของหอ (ครั้งแรก) เพื่อผูกเครื่องนี้กับบัญชีเจ้าของหอ')
         return
       }
 
@@ -112,6 +141,8 @@ export function OwnerPage() {
         if (ownerProfileError || !ownerProfile) {
           throw new Error('บัญชีนี้ยังไม่ถูกกำหนดสิทธิ์ owner ในตาราง owner_profiles')
         }
+
+        setHasOwnerSupabaseSession(true)
       } catch (authError) {
         setError(authError instanceof Error ? authError.message : 'เข้าสู่ระบบเจ้าของหอไม่สำเร็จ')
         return
@@ -224,8 +255,10 @@ export function OwnerPage() {
       await supabase.auth.signOut()
     }
 
+    setHasOwnerSupabaseSession(false)
     setIsAuthorized(false)
     setPin('')
+    setOwnerEmail('')
     setOwnerPassword('')
     setError('')
     setSuccess('')
@@ -288,7 +321,15 @@ export function OwnerPage() {
         <section className="panel owner-gate">
           <h1>เฉพาะเจ้าของหอ</h1>
           <p>กรอก PIN เพื่อเข้าหน้าออกบิล</p>
-          {supabase ? <p className="panel-description">ถ้าต้องการให้ข้อมูลซิงก์ข้ามอุปกรณ์ กรุณาล็อกอิน Supabase owner ด้วย</p> : null}
+          {supabase ? (
+            <p className="panel-description">
+              {isCheckingOwnerSession
+                ? 'กำลังตรวจสอบบัญชีเจ้าของหอในเครื่องนี้...'
+                : hasOwnerSupabaseSession
+                  ? 'เครื่องนี้ผูกบัญชีเจ้าของหอแล้ว ใช้แค่ PIN ได้เลย'
+                  : 'ครั้งแรกให้กรอกอีเมล/รหัสผ่านเจ้าของหอเพื่อผูกเครื่องนี้ หลังจากนั้นใช้แค่ PIN'}
+            </p>
+          ) : null}
           <form onSubmit={(event) => void authorizeOwner(event)} className="pin-form">
             <input
               type="password"
@@ -297,23 +338,25 @@ export function OwnerPage() {
               onChange={(event) => setPin(event.target.value)}
               placeholder="Owner PIN"
             />
-            {supabase ? (
+            {supabase && !hasOwnerSupabaseSession ? (
               <>
                 <input
                   type="email"
                   value={ownerEmail}
                   onChange={(event) => setOwnerEmail(event.target.value)}
                   placeholder="Owner email (Supabase Auth)"
+                  disabled={isSigningIn || isCheckingOwnerSession}
                 />
                 <input
                   type="password"
                   value={ownerPassword}
                   onChange={(event) => setOwnerPassword(event.target.value)}
                   placeholder="Owner password"
+                  disabled={isSigningIn || isCheckingOwnerSession}
                 />
               </>
             ) : null}
-            <button className="btn btn-primary" type="submit">
+            <button className="btn btn-primary" type="submit" disabled={isSigningIn || isCheckingOwnerSession}>
               {isSigningIn ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
             </button>
           </form>
