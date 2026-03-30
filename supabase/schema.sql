@@ -85,3 +85,17 @@ with check (
     select 1 from public.owner_profiles op where op.user_id = auth.uid()
   )
 );
+
+create or replace function public.keepalive()
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'ok', true,
+    'timestamp', now()
+  );
+$$;
+
+grant execute on function public.keepalive() to anon, authenticated;
