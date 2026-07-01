@@ -31,28 +31,45 @@ function createInitialDrafts(allBills: BillRecord[] = []): Record<string, MeterD
   const today = new Date()
   const dayOfMonth = today.getDate()
   const isAfterMidMonth = dayOfMonth > 15
+  const currentMonthKey = getCurrentMonthKey()
 
   return ROOMS.reduce<Record<string, MeterDraft>>((acc, room) => {
-    // Find the right historical bill to source meterBefore
     const roomBills = allBills
       .filter((b) => b.roomId === room.id)
       .sort((a, b) => new Date(b.issuedAtISO).getTime() - new Date(a.issuedAtISO).getTime())
 
-    let meterBefore = 0
+    const latestBill = roomBills[0]
+    const hasCurrentBill = Boolean(latestBill && latestBill.billingMonthKey === currentMonthKey)
 
-    if (roomBills.length === 0) {
-      meterBefore = 0
-    } else if (isAfterMidMonth) {
-      // After 15th: meterBefore = latest bill's meterAfter (i.e. last month)
-      meterBefore = roomBills[0].meterAfter
+    let meterBefore = 0
+    let meterAfter = 0
+
+    if (hasCurrentBill) {
+      // There's already a bill for the current billing period
+      if (isAfterMidMonth) {
+        // After 15th: new billing cycle — meterBefore = latest, meterAfter = blank
+        meterBefore = latestBill.meterAfter
+        meterAfter = 0
+      } else {
+        // Before 16th: still showing the current bill — keep meterAfter visible
+        meterBefore = roomBills.length >= 2 ? roomBills[1].meterAfter : latestBill.meterAfter
+        meterAfter = latestBill.meterAfter
+      }
     } else {
-      // Before 16th: meterBefore = second-to-last bill's meterAfter (two months ago)
-      meterBefore = roomBills.length >= 2 ? roomBills[1].meterAfter : roomBills[0].meterAfter
+      // No current-period bill, ready to issue a new one
+      if (roomBills.length === 0) {
+        meterBefore = 0
+      } else if (isAfterMidMonth) {
+        meterBefore = roomBills[0].meterAfter
+      } else {
+        meterBefore = roomBills.length >= 2 ? roomBills[1].meterAfter : roomBills[0].meterAfter
+      }
+      meterAfter = 0
     }
 
     acc[room.id] = {
       meterBefore,
-      meterAfter: 0,
+      meterAfter,
       mode: 'postpaid',
     }
     return acc
