@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { TopNav } from './components/TopNav'
 import { HomePage } from './pages/HomePage'
 import { OwnerPage } from './pages/OwnerPage'
+import { RoomSettingsPage } from './pages/RoomSettingsPage'
 import { RulesPage } from './pages/RulesPage'
 import { TenantPage } from './pages/TenantPage'
 
@@ -14,6 +15,7 @@ function App() {
         <Route path="/tenant" element={<TenantPage />} />
         <Route path="/rules" element={<RulesPage />} />
         <Route path="/owner" element={<OwnerPage />} />
+        <Route path="/owner/settings" element={<RoomSettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>

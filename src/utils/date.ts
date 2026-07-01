@@ -1,5 +1,15 @@
 import type { BillingMode } from '../types'
 
+/**
+ * Get the billing month key for the current month in YYYY-MM format (Thailand timezone-safe).
+ */
+export function getCurrentMonthKey(): string {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  return `${year}-${month}`
+}
+
 function shiftMonth(date: Date, monthOffset: number): Date {
   return new Date(date.getFullYear(), date.getMonth() + monthOffset, 1)
 }
@@ -12,6 +22,8 @@ function formatThaiMonthYear(date: Date): string {
 }
 
 export function getBillingMonth(mode: BillingMode, issuedAt: Date) {
+  // For postpaid (current month): shiftMonth(issuedAt, 0) = current month
+  // For prepaid (advance payment): shiftMonth(issuedAt, 1) = next month
   const targetDate = mode === 'prepaid' ? shiftMonth(issuedAt, 1) : shiftMonth(issuedAt, 0)
 
   const year = targetDate.getFullYear()

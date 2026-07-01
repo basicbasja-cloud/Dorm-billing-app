@@ -261,6 +261,67 @@ select {
   font-size: 1.1rem;
 }
 
+.room-settings-grid {
+  margin-top: 16px;
+  display: grid;
+  gap: 8px;
+}
+
+.room-settings-header {
+  display: grid;
+  grid-template-columns: 80px 1fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.93rem;
+}
+
+.room-settings-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 4px;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.room-settings-row.overridden {
+  background: var(--bg-soft);
+}
+
+.room-label {
+  font-weight: 600;
+}
+
+.rent-current {
+  font-size: 0.95rem;
+}
+
+.rent-current.strikethrough {
+  text-decoration: line-through;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.88rem;
+}
+
+.owner-sub-nav {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 16px;
+}
+
 .pin-display {
   display: grid;
   grid-template-columns: repeat(4, minmax(42px, 56px));

@@ -267,3 +267,20 @@ export async function clearAllBills(): Promise<void> {
     throw new Error(`ลบข้อมูลบน Supabase ไม่สำเร็จ: ${error.message}`)
   }
 }
+
+export async function deleteBillById(billId: string): Promise<void> {
+  const currentBills = getLocalBills()
+  setLocalBills(currentBills.filter((b) => b.id !== billId))
+
+  const client = await getAuthenticatedClient()
+  if (!client) {
+    return
+  }
+
+  const { error } = await client.from('bills').delete().eq('id', billId)
+  if (error) {
+    // Rollback
+    setLocalBills(currentBills)
+    throw new Error(`ลบบิลไม่สำเร็จ: ${error.message}`)
+  }
+}

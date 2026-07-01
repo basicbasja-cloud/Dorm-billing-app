@@ -18,6 +18,13 @@ create table if not exists public.tenant_accounts (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.room_settings (
+  room_id text primary key,
+  monthly_rent integer not null,
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id)
+);
+
 create table if not exists public.bills (
   id uuid primary key default gen_random_uuid(),
   room_id text not null,
@@ -46,6 +53,7 @@ alter table public.bills enable row level security;
 alter table public.tenant_profiles enable row level security;
 alter table public.owner_profiles enable row level security;
 alter table public.tenant_accounts enable row level security;
+alter table public.room_settings enable row level security;
 
 drop policy if exists "public read bills" on public.bills;
 drop policy if exists "public insert bills" on public.bills;
@@ -58,6 +66,9 @@ drop policy if exists "owner insert bills" on public.bills;
 drop policy if exists "owner delete bills" on public.bills;
 drop policy if exists "owner read tenant accounts" on public.tenant_accounts;
 drop policy if exists "owner delete tenant accounts" on public.tenant_accounts;
+drop policy if exists "owner read room settings" on public.room_settings;
+drop policy if exists "owner upsert room settings" on public.room_settings;
+drop policy if exists "owner update room settings" on public.room_settings;
 
 create policy "tenant read own profile"
 on public.tenant_profiles
@@ -124,6 +135,33 @@ using (
 create policy "owner delete tenant accounts"
 on public.tenant_accounts
 for delete
+using (
+  exists (
+    select 1 from public.owner_profiles op where op.user_id = auth.uid()
+  )
+);
+
+create policy "owner read room settings"
+on public.room_settings
+for select
+using (
+  exists (
+    select 1 from public.owner_profiles op where op.user_id = auth.uid()
+  )
+);
+
+create policy "owner upsert room settings"
+on public.room_settings
+for insert
+with check (
+  exists (
+    select 1 from public.owner_profiles op where op.user_id = auth.uid()
+  )
+);
+
+create policy "owner update room settings"
+on public.room_settings
+for update
 using (
   exists (
     select 1 from public.owner_profiles op where op.user_id = auth.uid()

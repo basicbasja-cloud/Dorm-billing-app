@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { BillDocument } from '../components/BillDocument'
 import { ROOMS } from '../data/rooms'
 import {
   clearAllBills,
+  deleteBillById,
   getAllBills,
   getLatestBills,
   getRoomHistoryFromBills,
@@ -12,6 +14,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { formatCurrency } from '../utils/billing'
 import { createBill } from '../utils/billing'
+import { getCurrentMonthKey } from '../utils/date'
 import type { BillRecord, BillsByRoom, BillingMode } from '../types'
 import { saveNodeAsPng } from '../utils/png'
 
@@ -69,6 +72,27 @@ export function OwnerPage() {
       setAllBills(all)
     })()
   }, [])
+
+  // Keepalive: ping Supabase every 5 minutes while owner is using the app
+  useEffect(() => {
+    if (!supabase || !isAuthorized) {
+      return
+    }
+
+    const client = supabase
+
+    const keepAlive = () => {
+      void client.rpc('keepalive').then(({ error }: { error: { message: string } | null }) => {
+        if (error) {
+          console.warn('Keepalive ping failed:', error.message)
+        }
+      })
+    }
+
+    const intervalId = setInterval(keepAlive, 300_000) // 5 minutes
+
+    return () => clearInterval(intervalId)
+  }, [isAuthorized])
 
   useEffect(() => {
     if (!supabase) {
@@ -327,6 +351,40 @@ export function OwnerPage() {
     }
   }
 
+  async function deleteCurrentMonthBill(roomId: string) {
+    setError('')
+    setSuccess('')
+
+    const bill = billsByRoom[roomId]
+    if (!bill) {
+      return
+    }
+
+    const currentMonth = getCurrentMonthKey()
+    if (bill.billingMonthKey !== currentMonth) {
+      setError(`ลบบิลได้เฉพาะเดือนปัจจุบัน (${currentMonth}) เท่านั้น`)
+      return
+    }
+
+    const shouldDelete = window.confirm(`ยืนยันลบบิลห้อง ${roomId} เดือน ${bill.billingMonthLabel}?`)
+    if (!shouldDelete) {
+      return
+    }
+
+    try {
+      await deleteBillById(bill.id)
+      setBillsByRoom((current) => {
+        const copy = { ...current }
+        delete copy[roomId]
+        return copy
+      })
+      setAllBills((current) => current.filter((b) => b.id !== bill.id))
+      setSuccess(`ลบบิลห้อง ${roomId} ประจำเดือน ${bill.billingMonthLabel} แล้ว`)
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'ลบบิลไม่สำเร็จ')
+    }
+  }
+
   async function deleteTenantAccount() {
     if (!supabase) {
       setError('ยังไม่ได้ตั้งค่า Supabase')
@@ -469,6 +527,9 @@ export function OwnerPage() {
         <div className="panel-header-row">
           <h1>แดชบอร์ดเจ้าของหอ</h1>
           <div className="header-actions">
+            <Link to="/owner/settings" className="btn btn-secondary">
+              ตั้งค่าค่าเช่า
+            </Link>
             <button className="btn btn-secondary" onClick={() => void saveAllBills()}>
               เซฟทั้งหมด (ทุกห้อง)
             </button>
@@ -545,6 +606,11 @@ export function OwnerPage() {
                   <button className="btn btn-ghost" onClick={() => viewBill(room.id)} disabled={!hasIssued}>
                     ดูบิล
                   </button>
+                  {hasIssued && latestBill && latestBill.billingMonthKey === getCurrentMonthKey() ? (
+                    <button className="btn btn-danger btn-sm" onClick={() => void deleteCurrentMonthBill(room.id)}>
+                      ลบบิล
+                    </button>
+                  ) : null}
                 </div>
               </article>
             )
