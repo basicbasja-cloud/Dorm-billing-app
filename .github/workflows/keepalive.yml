@@ -1,0 +1,26 @@
+# =============================================================================
+# Supabase Keepalive — ping every 5 days to prevent Free Tier pausing.
+# The anon key here is a publishable (sb_publishable_) key designed to be
+# public — same key already embedded client-side in src/lib/supabase.ts.
+# =============================================================================
+name: Supabase Keepalive
+
+on:
+  schedule:
+    - cron: '0 0 */5 * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Supabase keepalive RPC
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --request POST \
+            --url "https://euuovmqydddzxybhndqo.supabase.co/rest/v1/rpc/keepalive" \
+            --header "apikey: sb_publishable_DAGFRvDOO6oFUhO7sTewCA_gSrOaJfi" \
+            --header "Authorization: Bearer sb_publishable_DAGFRvDOO6oFUhO7sTewCA_gSrOaJfi" \
+            --header "Content-Type: application/json" \
+            --data '{}')
+          echo "Keepalive HTTP status: $STATUS"
