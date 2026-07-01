@@ -98,6 +98,24 @@ export function OwnerPage() {
   const billRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const latestBillPanelRef = useRef<HTMLElement | null>(null)
 
+  // Load bills on mount (from localStorage or existing Supabase session), then again after auth
+  const loadBills = useRef(false)
+
+  useEffect(() => {
+    if (loadBills.current) {
+      return
+    }
+    loadBills.current = true
+
+    void (async () => {
+      const latest = await getLatestBills()
+      setBillsByRoom(latest)
+      const all = await getAllBills()
+      setAllBills(all)
+      setDrafts(createInitialDrafts(all))
+    })()
+  }, [])
+
   useEffect(() => {
     if (!isAuthorized) {
       return
