@@ -155,9 +155,11 @@ export function getRoomHistoryFromBills(allBills: BillRecord[], roomId: string):
 }
 
 export async function getAllBills(): Promise<BillRecord[]> {
+  const localBills = sortBillsNewestFirst(getLocalBills())
+
   const client = await getAuthenticatedClient()
   if (!client) {
-    return sortBillsNewestFirst(getLocalBills())
+    return localBills
   }
 
   const { data, error } = await client
@@ -166,12 +168,18 @@ export async function getAllBills(): Promise<BillRecord[]> {
     .order('issued_at_iso', { ascending: false })
 
   if (error || !data) {
-    return sortBillsNewestFirst(getLocalBills())
+    return localBills
   }
 
   const remoteBills = (data as BillRow[]).map(fromRow)
-  setLocalBills(remoteBills)
-  return sortBillsNewestFirst(remoteBills)
+
+  // Only overwrite local if remote actually has data
+  if (remoteBills.length > 0) {
+    setLocalBills(remoteBills)
+    return sortBillsNewestFirst(remoteBills)
+  }
+
+  return localBills
 }
 
 export async function getBillsByRoom(roomId: string): Promise<BillRecord[]> {
@@ -194,9 +202,11 @@ export async function getBillsByRoom(roomId: string): Promise<BillRecord[]> {
 }
 
 export async function getLatestBills(): Promise<BillsByRoom> {
+  const localMap = toLatestMap(getLocalBills())
+
   const client = await getAuthenticatedClient()
   if (!client) {
-    return toLatestMap(getLocalBills())
+    return localMap
   }
 
   const { data, error } = await client
@@ -205,12 +215,18 @@ export async function getLatestBills(): Promise<BillsByRoom> {
     .order('issued_at_iso', { ascending: false })
 
   if (error || !data) {
-    return toLatestMap(getLocalBills())
+    return localMap
   }
 
   const remoteBills = (data as BillRow[]).map(fromRow)
-  setLocalBills(remoteBills)
-  return toLatestMap(remoteBills)
+
+  // Only overwrite local if remote actually has data
+  if (remoteBills.length > 0) {
+    setLocalBills(remoteBills)
+    return toLatestMap(remoteBills)
+  }
+
+  return localMap
 }
 
 export async function saveBill(bill: BillRecord): Promise<void> {
