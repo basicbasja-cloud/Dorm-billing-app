@@ -99,6 +99,10 @@ export function OwnerPage() {
   const latestBillPanelRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
+    if (!isAuthorized) {
+      return
+    }
+
     void (async () => {
       const latest = await getLatestBills()
       setBillsByRoom(latest)
@@ -106,7 +110,7 @@ export function OwnerPage() {
       setAllBills(all)
       setDrafts(createInitialDrafts(all))
     })()
-  }, [])
+  }, [isAuthorized])
 
   // Keepalive: ping Supabase every 5 minutes while owner is using the app
   useEffect(() => {
