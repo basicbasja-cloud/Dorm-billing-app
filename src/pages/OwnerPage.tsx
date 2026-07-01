@@ -27,13 +27,31 @@ interface MeterDraft {
 const OWNER_PIN = import.meta.env.VITE_OWNER_PIN ?? '123789'
 const OWNER_PIN_LENGTH = OWNER_PIN.length
 
-function createInitialDrafts(latestBills: BillsByRoom = {}): Record<string, MeterDraft> {
+function createInitialDrafts(allBills: BillRecord[] = []): Record<string, MeterDraft> {
+  const today = new Date()
+  const dayOfMonth = today.getDate()
+  const isAfterMidMonth = dayOfMonth > 15
+
   return ROOMS.reduce<Record<string, MeterDraft>>((acc, room) => {
-    const latestBill = latestBills[room.id]
-    const initialMeter = latestBill?.meterAfter ?? 0
+    // Find the right historical bill to source meterBefore
+    const roomBills = allBills
+      .filter((b) => b.roomId === room.id)
+      .sort((a, b) => new Date(b.issuedAtISO).getTime() - new Date(a.issuedAtISO).getTime())
+
+    let meterBefore = 0
+
+    if (roomBills.length === 0) {
+      meterBefore = 0
+    } else if (isAfterMidMonth) {
+      // After 15th: meterBefore = latest bill's meterAfter (i.e. last month)
+      meterBefore = roomBills[0].meterAfter
+    } else {
+      // Before 16th: meterBefore = second-to-last bill's meterAfter (two months ago)
+      meterBefore = roomBills.length >= 2 ? roomBills[1].meterAfter : roomBills[0].meterAfter
+    }
 
     acc[room.id] = {
-      meterBefore: initialMeter,
+      meterBefore,
       meterAfter: 0,
       mode: 'postpaid',
     }
@@ -53,7 +71,7 @@ export function OwnerPage() {
   const [tenantAccountRoomId, setTenantAccountRoomId] = useState(ROOMS[0].id)
   const [isDeletingTenantAccount, setIsDeletingTenantAccount] = useState(false)
   const [billsByRoom, setBillsByRoom] = useState<BillsByRoom>({})
-  const [drafts, setDrafts] = useState<Record<string, MeterDraft>>(() => createInitialDrafts())
+  const [drafts, setDrafts] = useState<Record<string, MeterDraft>>(() => createInitialDrafts([]))
   const [selectedRoomId, setSelectedRoomId] = useState(ROOMS[0].id)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -67,9 +85,9 @@ export function OwnerPage() {
     void (async () => {
       const latest = await getLatestBills()
       setBillsByRoom(latest)
-      setDrafts(createInitialDrafts(latest))
       const all = await getAllBills()
       setAllBills(all)
+      setDrafts(createInitialDrafts(all))
     })()
   }, [])
 
@@ -256,12 +274,17 @@ export function OwnerPage() {
       await saveBill(bill)
       setBillsByRoom((current) => ({ ...current, [roomId]: bill }))
       setAllBills((current) => [bill, ...current])
+
+      const today = new Date()
+      const dayOfMonth = today.getDate()
+      const isAfterMidMonth = dayOfMonth > 15
+
       setDrafts((current) => ({
         ...current,
         [roomId]: {
           ...current[roomId],
-          meterBefore: bill.meterAfter,
-          meterAfter: 0,
+          meterBefore: isAfterMidMonth ? bill.meterAfter : (current[roomId]?.meterBefore ?? bill.meterAfter),
+          meterAfter: isAfterMidMonth ? 0 : bill.meterAfter,
         },
       }))
       setSelectedRoomId(roomId)
@@ -342,7 +365,7 @@ export function OwnerPage() {
       await clearAllBills()
       setBillsByRoom({})
       setAllBills([])
-      setDrafts(createInitialDrafts())
+      setDrafts(createInitialDrafts([]))
       setSelectedRoomId(ROOMS[0].id)
       setHistoryRoomId(ROOMS[0].id)
       setSuccess('ล้างข้อมูลบิลทั้งหมดเรียบร้อย')
@@ -414,10 +437,13 @@ export function OwnerPage() {
       })
       setAllBills((current) => current.filter((b) => b.id !== bill.id))
 
-      // Pre-fill draft with old bill's meterBefore, leave meterAfter blank
+      // Pre-fill draft: keep old meterBefore before 16th, use bill's after 15th
+      const today = new Date()
+      const dayOfMonth = today.getDate()
+      const isAfterMidMonth = dayOfMonth > 15
       updateDraft(roomId, {
-        meterBefore: bill.meterBefore,
-        meterAfter: 0,
+        meterBefore: isAfterMidMonth ? bill.meterAfter : bill.meterBefore,
+        meterAfter: isAfterMidMonth ? 0 : bill.meterAfter,
         mode: bill.mode,
       })
 
