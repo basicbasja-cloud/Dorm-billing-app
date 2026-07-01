@@ -615,7 +615,6 @@ export function OwnerPage() {
                     min={0}
                     value={draft.meterBefore}
                     onChange={(event) => updateDraft(room.id, { meterBefore: Number(event.target.value) })}
-                    disabled={hasCurrentMonthBill}
                   />
                 </label>
 
@@ -632,7 +631,6 @@ export function OwnerPage() {
                     min={0}
                     value={draft.meterAfter}
                     onChange={(event) => updateDraft(room.id, { meterAfter: Number(event.target.value) })}
-                    disabled={hasCurrentMonthBill}
                   />
                 </label>
 
@@ -641,7 +639,6 @@ export function OwnerPage() {
                   <select
                     value={draft.mode}
                     onChange={(event) => updateDraft(room.id, { mode: event.target.value as BillingMode })}
-                    disabled={hasCurrentMonthBill}
                   >
                     <option value="postpaid">จ่ายเดือนปัจจุบัน</option>
                     <option value="prepaid">จ่ายล่วงหน้า</option>
