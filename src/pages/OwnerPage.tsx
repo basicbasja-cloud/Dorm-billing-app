@@ -14,7 +14,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { formatCurrency } from '../utils/billing'
 import { createBill } from '../utils/billing'
-import { getCurrentMonthKey } from '../utils/date'
+import { getBillingMonth } from '../utils/date'
 import type { BillRecord, BillsByRoom, BillingMode } from '../types'
 import { saveNodeAsPng } from '../utils/png'
 
@@ -31,7 +31,6 @@ function createInitialDrafts(allBills: BillRecord[] = []): Record<string, MeterD
   const today = new Date()
   const dayOfMonth = today.getDate()
   const isAfterMidMonth = dayOfMonth > 15
-  const currentMonthKey = getCurrentMonthKey()
 
   return ROOMS.reduce<Record<string, MeterDraft>>((acc, room) => {
     const roomBills = allBills
@@ -39,24 +38,24 @@ function createInitialDrafts(allBills: BillRecord[] = []): Record<string, MeterD
       .sort((a, b) => new Date(b.issuedAtISO).getTime() - new Date(a.issuedAtISO).getTime())
 
     const latestBill = roomBills[0]
-    const hasCurrentBill = Boolean(latestBill && latestBill.billingMonthKey === currentMonthKey)
+    const defaultMode: BillingMode = 'postpaid'
+
+    // What billing month WOULD a new bill for this room have, given its mode?
+    const expectedKey = getBillingMonth(defaultMode, today).key
+    const hasCurrentBill = Boolean(latestBill && latestBill.billingMonthKey === expectedKey)
 
     let meterBefore = 0
     let meterAfter = 0
 
     if (hasCurrentBill) {
-      // There's already a bill for the current billing period
       if (isAfterMidMonth) {
-        // After 15th: new billing cycle — meterBefore = latest, meterAfter = blank
         meterBefore = latestBill.meterAfter
         meterAfter = 0
       } else {
-        // Before 16th: still showing the current bill — keep meterAfter visible
         meterBefore = roomBills.length >= 2 ? roomBills[1].meterAfter : latestBill.meterAfter
         meterAfter = latestBill.meterAfter
       }
     } else {
-      // No current-period bill, ready to issue a new one
       if (roomBills.length === 0) {
         meterBefore = 0
       } else if (isAfterMidMonth) {
@@ -70,7 +69,7 @@ function createInitialDrafts(allBills: BillRecord[] = []): Record<string, MeterD
     acc[room.id] = {
       meterBefore,
       meterAfter,
-      mode: 'postpaid',
+      mode: defaultMode,
     }
     return acc
   }, {})
@@ -422,9 +421,9 @@ export function OwnerPage() {
       return
     }
 
-    const currentMonth = getCurrentMonthKey()
-    if (bill.billingMonthKey !== currentMonth) {
-      setError(`ลบบิลได้เฉพาะเดือนปัจจุบัน (${currentMonth}) เท่านั้น`)
+    const expectedKey = getBillingMonth(bill.mode, new Date()).key
+    if (bill.billingMonthKey !== expectedKey) {
+      setError(`ลบบิลได้เฉพาะบิลของรอบปัจจุบัน (${expectedKey}) เท่านั้น`)
       return
     }
 
@@ -456,9 +455,9 @@ export function OwnerPage() {
       return
     }
 
-    const currentMonth = getCurrentMonthKey()
-    if (bill.billingMonthKey !== currentMonth) {
-      setError(`แก้ไขบิลได้เฉพาะเดือนปัจจุบัน (${currentMonth}) เท่านั้น`)
+    const expectedKey = getBillingMonth(bill.mode, new Date()).key
+    if (bill.billingMonthKey !== expectedKey) {
+      setError(`แก้ไขบิลได้เฉพาะบิลของรอบปัจจุบัน (${expectedKey}) เท่านั้น`)
       return
     }
 
@@ -657,8 +656,8 @@ export function OwnerPage() {
           {ROOMS.map((room) => {
             const draft = drafts[room.id] ?? { meterBefore: 0, meterAfter: 0, mode: 'postpaid' as BillingMode }
             const latestBill = billsByRoom[room.id]
-            const currentMonthKey = getCurrentMonthKey()
-            const hasCurrentMonthBill = Boolean(latestBill && latestBill.billingMonthKey === currentMonthKey)
+            const expectedBillingKey = getBillingMonth(draft.mode, new Date()).key
+            const hasCurrentMonthBill = Boolean(latestBill && latestBill.billingMonthKey === expectedBillingKey)
 
             return (
               <article key={room.id} className="room-card">
