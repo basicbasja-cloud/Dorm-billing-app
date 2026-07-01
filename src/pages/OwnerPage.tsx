@@ -385,6 +385,48 @@ export function OwnerPage() {
     }
   }
 
+  async function editCurrentMonthBill(roomId: string) {
+    setError('')
+    setSuccess('')
+
+    const bill = billsByRoom[roomId]
+    if (!bill) {
+      return
+    }
+
+    const currentMonth = getCurrentMonthKey()
+    if (bill.billingMonthKey !== currentMonth) {
+      setError(`แก้ไขบิลได้เฉพาะเดือนปัจจุบัน (${currentMonth}) เท่านั้น`)
+      return
+    }
+
+    const shouldEdit = window.confirm(`ยืนยันแก้ไขบิลห้อง ${roomId} เดือน ${bill.billingMonthLabel}? ระบบจะลบบิลเก่าแล้วเปิดให้ออกใหม่`)
+    if (!shouldEdit) {
+      return
+    }
+
+    try {
+      await deleteBillById(bill.id)
+      setBillsByRoom((current) => {
+        const copy = { ...current }
+        delete copy[roomId]
+        return copy
+      })
+      setAllBills((current) => current.filter((b) => b.id !== bill.id))
+
+      // Pre-fill draft with old bill's values
+      updateDraft(roomId, {
+        meterBefore: bill.meterBefore,
+        meterAfter: bill.meterAfter,
+        mode: bill.mode,
+      })
+
+      setSuccess(`ลบบิลเก่าห้อง ${roomId} แล้ว กรุณาแก้ไขข้อมูลแล้วกดออกบิลใหม่`)
+    } catch (editError) {
+      setError(editError instanceof Error ? editError.message : 'แก้ไขบิลไม่สำเร็จ')
+    }
+  }
+
   async function deleteTenantAccount() {
     if (!supabase) {
       setError('ยังไม่ได้ตั้งค่า Supabase')
@@ -550,7 +592,8 @@ export function OwnerPage() {
           {ROOMS.map((room) => {
             const draft = drafts[room.id] ?? { meterBefore: 0, meterAfter: 0, mode: 'postpaid' as BillingMode }
             const latestBill = billsByRoom[room.id]
-            const hasIssued = Boolean(latestBill)
+            const currentMonthKey = getCurrentMonthKey()
+            const hasCurrentMonthBill = Boolean(latestBill && latestBill.billingMonthKey === currentMonthKey)
 
             return (
               <article key={room.id} className="room-card">
@@ -559,6 +602,12 @@ export function OwnerPage() {
                   <p>ค่าเช่า {room.monthlyRent.toLocaleString('th-TH')} บาท</p>
                 </header>
 
+                {hasCurrentMonthBill ? (
+                  <p className="field-hint" style={{ color: 'var(--teal)', fontWeight: 600 }}>
+                    มีบิลเดือนนี้แล้ว (กดแก้ไขเพื่อออกใหม่)
+                  </p>
+                ) : null}
+
                 <label>
                   เลขไฟก่อน
                   <input
@@ -566,6 +615,7 @@ export function OwnerPage() {
                     min={0}
                     value={draft.meterBefore}
                     onChange={(event) => updateDraft(room.id, { meterBefore: Number(event.target.value) })}
+                    disabled={hasCurrentMonthBill}
                   />
                 </label>
 
@@ -582,6 +632,7 @@ export function OwnerPage() {
                     min={0}
                     value={draft.meterAfter}
                     onChange={(event) => updateDraft(room.id, { meterAfter: Number(event.target.value) })}
+                    disabled={hasCurrentMonthBill}
                   />
                 </label>
 
@@ -590,6 +641,7 @@ export function OwnerPage() {
                   <select
                     value={draft.mode}
                     onChange={(event) => updateDraft(room.id, { mode: event.target.value as BillingMode })}
+                    disabled={hasCurrentMonthBill}
                   >
                     <option value="postpaid">จ่ายเดือนปัจจุบัน</option>
                     <option value="prepaid">จ่ายล่วงหน้า</option>
@@ -597,20 +649,34 @@ export function OwnerPage() {
                 </label>
 
                 <div className="card-actions">
-                  <button className="btn btn-primary" onClick={() => void issueBillForRoom(room.id)}>
-                    ออกบิล
-                  </button>
-                  <button className="btn btn-secondary" onClick={() => void saveRoomBill(room.id)} disabled={!hasIssued}>
-                    เซฟ PNG
-                  </button>
-                  <button className="btn btn-ghost" onClick={() => viewBill(room.id)} disabled={!hasIssued}>
-                    ดูบิล
-                  </button>
-                  {hasIssued && latestBill && latestBill.billingMonthKey === getCurrentMonthKey() ? (
-                    <button className="btn btn-danger btn-sm" onClick={() => void deleteCurrentMonthBill(room.id)}>
-                      ลบบิล
-                    </button>
-                  ) : null}
+                  {hasCurrentMonthBill ? (
+                    <>
+                      <button className="btn btn-ghost" onClick={() => viewBill(room.id)}>
+                        ดูบิล
+                      </button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => void editCurrentMonthBill(room.id)}>
+                        แก้ไข
+                      </button>
+                      <button className="btn btn-danger btn-sm" onClick={() => void deleteCurrentMonthBill(room.id)}>
+                        ลบ
+                      </button>
+                      <button className="btn btn-secondary" onClick={() => void saveRoomBill(room.id)}>
+                        เซฟ PNG
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button className="btn btn-primary" onClick={() => void issueBillForRoom(room.id)}>
+                        ออกบิล
+                      </button>
+                      <button className="btn btn-secondary" onClick={() => void saveRoomBill(room.id)} disabled={!latestBill}>
+                        เซฟ PNG
+                      </button>
+                      <button className="btn btn-ghost" onClick={() => viewBill(room.id)} disabled={!latestBill}>
+                        ดูบิล
+                      </button>
+                    </>
+                  )}
                 </div>
               </article>
             )
