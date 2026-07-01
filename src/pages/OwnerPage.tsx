@@ -34,7 +34,7 @@ function createInitialDrafts(latestBills: BillsByRoom = {}): Record<string, Mete
 
     acc[room.id] = {
       meterBefore: initialMeter,
-      meterAfter: initialMeter,
+      meterAfter: 0,
       mode: 'postpaid',
     }
     return acc
@@ -261,7 +261,7 @@ export function OwnerPage() {
         [roomId]: {
           ...current[roomId],
           meterBefore: bill.meterAfter,
-          meterAfter: bill.meterAfter,
+          meterAfter: 0,
         },
       }))
       setSelectedRoomId(roomId)
@@ -414,10 +414,10 @@ export function OwnerPage() {
       })
       setAllBills((current) => current.filter((b) => b.id !== bill.id))
 
-      // Pre-fill draft with old bill's values
+      // Pre-fill draft with old bill's meterBefore, leave meterAfter blank
       updateDraft(roomId, {
         meterBefore: bill.meterBefore,
-        meterAfter: bill.meterAfter,
+        meterAfter: 0,
         mode: bill.mode,
       })
 
