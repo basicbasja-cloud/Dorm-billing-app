@@ -1,26 +1,7 @@
 import { supabase } from './supabase'
-import type { BillRecord, BillsByRoom } from '../types'
+import type { BillRecord, BillsByRoom, BillRow } from '../types'
 
 const STORAGE_KEY = 'dorm_bills_v1'
-
-interface BillRow {
-  id: string
-  room_id: string
-  mode: BillRecord['mode']
-  monthly_rent: number
-  electric_unit_price: number
-  meter_before: number
-  meter_after: number
-  electric_units: number
-  electric_amount: number
-  water_amount: number
-  total_amount: number
-  billing_month_label: string
-  billing_month_key: string
-  due_date_label: string
-  issued_at_iso: string
-  lines: BillRecord['lines']
-}
 
 function isBillRecord(value: unknown): value is BillRecord {
   if (!value || typeof value !== 'object') {

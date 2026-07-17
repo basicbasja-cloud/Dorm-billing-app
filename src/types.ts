@@ -35,3 +35,29 @@ export interface BillRecord {
 }
 
 export type BillsByRoom = Record<string, BillRecord>
+
+/** Raw row shape from the Supabase `bills` table (snake_case). */
+export interface BillRow {
+  id: string
+  room_id: string
+  mode: BillRecord['mode']
+  monthly_rent: number
+  electric_unit_price: number
+  meter_before: number
+  meter_after: number
+  electric_units: number
+  electric_amount: number
+  water_amount: number
+  total_amount: number
+  billing_month_label: string
+  billing_month_key: string
+  due_date_label: string
+  issued_at_iso: string
+  lines: BillRecord['lines']
+}
+
+export interface GlobalSettings {
+  electricUnitPrice: number
+  waterUnitPrice: number
+  tenantSetupKey: string
+}

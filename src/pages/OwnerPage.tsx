@@ -11,11 +11,12 @@ import {
   saveBill,
   summarizeMonthlyRevenue,
 } from '../lib/storage'
+import { loadGlobalSettings } from '../lib/global-settings'
 import { supabase } from '../lib/supabase'
 import { formatCurrency } from '../utils/billing'
 import { createBill } from '../utils/billing'
 import { getBillingMonth } from '../utils/date'
-import type { BillRecord, BillsByRoom, BillingMode } from '../types'
+import type { BillRecord, BillsByRoom, BillingMode, GlobalSettings } from '../types'
 import { saveNodeAsPng } from '../utils/png'
 
 interface MeterDraft {
@@ -92,6 +93,11 @@ export function OwnerPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [allBills, setAllBills] = useState<BillRecord[]>([])
+  const [globalSettings, setGlobalSettings] = useState<GlobalSettings>({
+    electricUnitPrice: 6,
+    waterUnitPrice: 0,
+    tenantSetupKey: 'setup-tenant-2026',
+  })
   const [historyRoomId, setHistoryRoomId] = useState(ROOMS[0].id)
 
   const billRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -107,10 +113,10 @@ export function OwnerPage() {
     loadBills.current = true
 
     void (async () => {
-      const latest = await getLatestBills()
+      const [latest, all, gs] = await Promise.all([getLatestBills(), getAllBills(), loadGlobalSettings()])
       setBillsByRoom(latest)
-      const all = await getAllBills()
       setAllBills(all)
+      setGlobalSettings(gs)
       setDrafts(createInitialDrafts(all))
     })()
   }, [])
@@ -121,10 +127,10 @@ export function OwnerPage() {
     }
 
     void (async () => {
-      const latest = await getLatestBills()
+      const [latest, all, gs] = await Promise.all([getLatestBills(), getAllBills(), loadGlobalSettings()])
       setBillsByRoom(latest)
-      const all = await getAllBills()
       setAllBills(all)
+      setGlobalSettings(gs)
       setDrafts(createInitialDrafts(all))
     })()
   }, [isAuthorized])
@@ -306,6 +312,8 @@ export function OwnerPage() {
       mode: draft.mode,
       meterBefore: draft.meterBefore,
       meterAfter: draft.meterAfter,
+      electricUnitPrice: globalSettings.electricUnitPrice,
+      waterUnitPrice: globalSettings.waterUnitPrice,
     })
 
     try {
@@ -636,6 +644,9 @@ export function OwnerPage() {
             <Link to="/owner/settings" className="btn btn-secondary">
               ตั้งค่าค่าเช่า
             </Link>
+            <Link to="/owner/global-settings" className="btn btn-secondary">
+              ตั้งค่าราคาค่าไฟ/น้ำ
+            </Link>
             <button className="btn btn-secondary" onClick={() => void saveAllBills()}>
               เซฟทั้งหมด (ทุกห้อง)
             </button>
@@ -648,7 +659,12 @@ export function OwnerPage() {
           </div>
         </div>
 
-        <p className="panel-description">ใส่เลขมิเตอร์หลังและตรวจสอบเลขมิเตอร์ก่อนก่อนออกบิล ระบบจะดึงเลขไฟก่อนจากบิลล่าสุดให้อัตโนมัติหลังจากเริ่มใช้งานครั้งแรก แต่เจ้าของหอยังแก้ไขเองได้</p>
+        <p className="panel-description">
+          ใส่เลขมิเตอร์หลังและตรวจสอบเลขมิเตอร์ก่อนก่อนออกบิล ค่าไฟหน่วยละ {globalSettings.electricUnitPrice} บาท
+          {globalSettings.waterUnitPrice > 0
+            ? `, ค่าน้ำเดือนละ ${globalSettings.waterUnitPrice} บาท`
+            : ', ค่าน้ำฟรี'}
+        </p>
         {error ? <p className="error-text">{error}</p> : null}
         {success ? <p className="status-text success">{success}</p> : null}
 

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { loadRoomSettings, saveRoomSetting } from '../lib/room-settings'
 import { ROOMS } from '../data/rooms'
 import { supabase } from '../lib/supabase'
 import { formatCurrency } from '../utils/billing'
 
 export function RoomSettingsPage() {
+  const [isAuthorized] = useState(() => sessionStorage.getItem('owner_access') === 'ok')
   const [settings, setSettings] = useState<Record<string, number>>({})
   const [draftValues, setDraftValues] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState<Record<string, boolean>>({})
@@ -13,11 +14,18 @@ export function RoomSettingsPage() {
   const [success, setSuccess] = useState('')
 
   useEffect(() => {
+    if (!isAuthorized) {
+      return
+    }
     void (async () => {
       const loaded = await loadRoomSettings()
       setSettings(loaded)
     })()
-  }, [])
+  }, [isAuthorized])
+
+  if (!isAuthorized) {
+    return <Navigate to="/owner" replace />
+  }
 
   function handleRentChange(roomId: string, rawValue: string) {
     setDraftValues((prev) => ({ ...prev, [roomId]: rawValue }))

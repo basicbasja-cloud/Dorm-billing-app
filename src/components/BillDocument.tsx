@@ -35,20 +35,14 @@ export const BillDocument = forwardRef<HTMLDivElement, BillDocumentProps>(
             </tr>
           </thead>
           <tbody>
-            {bill.lines.map((line) => (
-              <tr key={line.description}>
+            {bill.lines.map((line, index) => (
+              <tr key={index}>
                 <td>{line.description}</td>
                 <td>{line.quantityText}</td>
                 <td>{formatCurrency(line.unitPrice)}</td>
                 <td>{formatCurrency(line.amount)}</td>
               </tr>
             ))}
-            <tr>
-              <td>ค่าน้ำ</td>
-              <td>ฟรี</td>
-              <td>{formatCurrency(0)}</td>
-              <td>{formatCurrency(0)}</td>
-            </tr>
           </tbody>
           <tfoot>
             <tr>

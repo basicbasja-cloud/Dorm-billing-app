@@ -2,8 +2,6 @@ import type { Room } from '../types'
 
 export const DORM_NAME = 'หอพักสมใจ'
 export const DORM_ADDRESS = '133 หมู่ 2 ตำบลเมืองเดช อำเภอเดชอุดม จังหวัดอุบลราชธานี 34160'
-export const ELECTRICITY_UNIT_PRICE = 6
-
 const buildingA: Room[] = Array.from({ length: 7 }, (_, index) => ({
   id: `A${index + 1}`,
   building: 'A',

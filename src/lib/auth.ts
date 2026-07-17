@@ -1,32 +1,14 @@
-import { supabase } from './supabase'
+ import { supabase } from './supabase'
 import { ROOM_IDS } from '../data/rooms'
-import type { BillRecord } from '../types'
+import type { BillRecord, BillRow } from '../types'
 
 const TENANT_DOMAIN = 'tenant.somjai.app'
 const TENANT_SESSION_STORAGE_KEY = 'tenant_session_v2'
+const LOCAL_BILLS_KEY = 'dorm_bills_v1'
 
 interface TenantSession {
   roomId: string
   passwordHash: string
-}
-
-interface BillRow {
-  id: string
-  room_id: string
-  mode: BillRecord['mode']
-  monthly_rent: number
-  electric_unit_price: number
-  meter_before: number
-  meter_after: number
-  electric_units: number
-  electric_amount: number
-  water_amount: number
-  total_amount: number
-  billing_month_label: string
-  billing_month_key: string
-  due_date_label: string
-  issued_at_iso: string
-  lines: BillRecord['lines']
 }
 
 export interface TenantIdentity {
@@ -182,14 +164,33 @@ export async function signInTenant(roomId: string, password: string): Promise<Te
   }
 }
 
-export async function getTenantBills(roomId: string): Promise<BillRecord[]> {
-  if (!supabase) {
+/** Try to read bills from localStorage as a fallback. */
+function getLocalBillsForRoom(roomId: string): BillRecord[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_BILLS_KEY)
+    if (!raw) {
+      return []
+    }
+    const parsed = JSON.parse(raw) as unknown[]
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+    const roomBills = (parsed as BillRecord[]).filter((b) => b.roomId === roomId)
+    return roomBills.sort((a, b) => new Date(b.issuedAtISO).getTime() - new Date(a.issuedAtISO).getTime())
+  } catch {
     return []
   }
+}
 
+export async function getTenantBills(roomId: string): Promise<BillRecord[]> {
   const session = getTenantSession()
   if (!session || session.roomId !== roomId) {
     return []
+  }
+
+  // Without Supabase, fall back to localStorage
+  if (!supabase) {
+    return getLocalBillsForRoom(roomId)
   }
 
   const { data, error } = await supabase.rpc('tenant_fetch_bills', {
@@ -198,7 +199,8 @@ export async function getTenantBills(roomId: string): Promise<BillRecord[]> {
   })
 
   if (error || !Array.isArray(data)) {
-    return []
+    // Fall back to local if remote fails
+    return getLocalBillsForRoom(roomId)
   }
 
   return (data as BillRow[]).map(toBillRecord)

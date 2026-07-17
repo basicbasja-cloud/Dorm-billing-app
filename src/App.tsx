@@ -3,6 +3,7 @@ import { TopNav } from './components/TopNav'
 import { HomePage } from './pages/HomePage'
 import { OwnerPage } from './pages/OwnerPage'
 import { RoomSettingsPage } from './pages/RoomSettingsPage'
+import { GlobalSettingsPage } from './pages/GlobalSettingsPage'
 import { RulesPage } from './pages/RulesPage'
 import { TenantPage } from './pages/TenantPage'
 
@@ -16,6 +17,7 @@ function App() {
         <Route path="/rules" element={<RulesPage />} />
         <Route path="/owner" element={<OwnerPage />} />
         <Route path="/owner/settings" element={<RoomSettingsPage />} />
+        <Route path="/owner/global-settings" element={<GlobalSettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>

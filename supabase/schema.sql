@@ -25,6 +25,16 @@ create table if not exists public.room_settings (
   updated_by uuid references auth.users(id)
 );
 
+create table if not exists public.global_settings (
+  id boolean primary key default true,
+  electric_unit_price integer not null default 6,
+  water_unit_price integer not null default 0,
+  tenant_setup_key text not null default 'setup-tenant-2026',
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id),
+  constraint only_one_row check (id = true)
+);
+
 create table if not exists public.bills (
   id uuid primary key default gen_random_uuid(),
   room_id text not null,
@@ -54,6 +64,7 @@ alter table public.tenant_profiles enable row level security;
 alter table public.owner_profiles enable row level security;
 alter table public.tenant_accounts enable row level security;
 alter table public.room_settings enable row level security;
+alter table public.global_settings enable row level security;
 
 drop policy if exists "public read bills" on public.bills;
 drop policy if exists "public insert bills" on public.bills;
@@ -69,6 +80,8 @@ drop policy if exists "owner delete tenant accounts" on public.tenant_accounts;
 drop policy if exists "owner read room settings" on public.room_settings;
 drop policy if exists "owner upsert room settings" on public.room_settings;
 drop policy if exists "owner update room settings" on public.room_settings;
+drop policy if exists "owner read global settings" on public.global_settings;
+drop policy if exists "owner upsert global settings" on public.global_settings;
 
 create policy "tenant read own profile"
 on public.tenant_profiles
@@ -168,6 +181,33 @@ using (
   )
 );
 
+create policy "owner read global settings"
+on public.global_settings
+for select
+using (
+  exists (
+    select 1 from public.owner_profiles op where op.user_id = auth.uid()
+  )
+);
+
+create policy "owner upsert global settings"
+on public.global_settings
+for insert
+with check (
+  exists (
+    select 1 from public.owner_profiles op where op.user_id = auth.uid()
+  )
+);
+
+create policy "owner update global settings"
+on public.global_settings
+for update
+using (
+  exists (
+    select 1 from public.owner_profiles op where op.user_id = auth.uid()
+  )
+);
+
 create or replace function public.tenant_register(
   p_room_id text,
   p_password_hash text,
@@ -187,7 +227,10 @@ begin
     raise exception 'รหัสผ่านไม่ถูกต้อง';
   end if;
 
-  if p_setup_key not in ('somjai1234', 'setup-tenant-2026', 'tenant-setup-2026-9k2x') then
+  if not exists (
+    select 1 from public.global_settings gs
+    where gs.tenant_setup_key = p_setup_key
+  ) then
     raise exception 'รหัสยืนยันการลงทะเบียนไม่ถูกต้อง';
   end if;
 
@@ -256,7 +299,66 @@ as $$
   );
 $$;
 
+create or replace function public.get_global_settings()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  result jsonb;
+begin
+  select jsonb_build_object(
+    'electric_unit_price', gs.electric_unit_price,
+    'water_unit_price', gs.water_unit_price,
+    'tenant_setup_key', gs.tenant_setup_key
+  ) into result
+  from public.global_settings gs
+  where gs.id = true;
+
+  if result is null then
+    result := jsonb_build_object(
+      'electric_unit_price', 6,
+      'water_unit_price', 0,
+      'tenant_setup_key', 'setup-tenant-2026'
+    );
+  end if;
+
+  return result;
+end;
+$$;
+
+create or replace function public.upsert_global_settings(
+  p_electric_unit_price integer,
+  p_water_unit_price integer,
+  p_tenant_setup_key text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.global_settings (id, electric_unit_price, water_unit_price, tenant_setup_key, updated_by)
+  values (
+    true,
+    p_electric_unit_price,
+    p_water_unit_price,
+    coalesce(p_tenant_setup_key, 'setup-tenant-2026'),
+    auth.uid()
+  )
+  on conflict (id) do update set
+    electric_unit_price = excluded.electric_unit_price,
+    water_unit_price = excluded.water_unit_price,
+    tenant_setup_key = case when p_tenant_setup_key is not null then excluded.tenant_setup_key else global_settings.tenant_setup_key end,
+    updated_at = now(),
+    updated_by = excluded.updated_by;
+end;
+$$;
+
 grant execute on function public.keepalive() to anon, authenticated;
 grant execute on function public.tenant_register(text, text, text) to anon, authenticated;
 grant execute on function public.tenant_login(text, text) to anon, authenticated;
 grant execute on function public.tenant_fetch_bills(text, text) to anon, authenticated;
+grant execute on function public.get_global_settings() to anon, authenticated;
+grant execute on function public.upsert_global_settings(integer, integer, text) to anon, authenticated;
