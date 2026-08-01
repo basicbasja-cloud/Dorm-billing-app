@@ -4,7 +4,12 @@ import type { BillingMode } from '../types'
  * Billing cycle rule:
  * - Day 1-15 of a month  → billing month = this month
  * - Day 16-31 of a month → billing month = next month
- * Due date is always the 5th of the billing month.
+ * Due date is always the 5th of that same target month.
+ *
+ * NOTE: due date depends only on issuedAt (when the bill was created),
+ * NOT on billing mode. Mode only changes what the billing month label says
+ * (e.g. prepaid always labels the month ahead), but the payment deadline
+ * is always "5th of this-or-next month" based on the issue date alone.
  */
 export function getCurrentMonthKey(): string {
   const now = new Date()
@@ -27,7 +32,7 @@ function formatThaiMonthYear(date: Date): string {
   }).format(date)
 }
 
-// Shared: figure out which calendar month this bill is actually billing for.
+// Only used for the billing month LABEL. Depends on mode.
 function getBillingTargetDate(mode: BillingMode, issuedAt: Date): Date {
   if (mode === 'prepaid') {
     // Prepaid: always next month
@@ -49,9 +54,15 @@ export function getBillingMonth(mode: BillingMode, issuedAt: Date) {
   }
 }
 
-// Due date is always the 5th of the billing month itself, for both modes.
-export function getDueDateLabel(mode: BillingMode, issuedAt: Date): string {
-  const targetDate = getBillingTargetDate(mode, issuedAt)
+// Only used for the DUE DATE. Independent of mode — based purely on issuedAt.
+function getDueTargetDate(issuedAt: Date): Date {
+  const day = issuedAt.getDate()
+  const offset = day <= 15 ? 0 : 1
+  return shiftMonth(issuedAt, offset)
+}
+
+export function getDueDateLabel(issuedAt: Date): string {
+  const targetDate = getDueTargetDate(issuedAt)
   const dueDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), 5)
 
   const day = new Intl.DateTimeFormat('th-TH', { day: 'numeric' }).format(dueDate)
