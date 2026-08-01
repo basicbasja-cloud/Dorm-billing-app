@@ -65,7 +65,7 @@ export function createBill(input: CreateBillInput): BillRecord {
     totalAmount,
     billingMonthLabel: billingMonth.label,
     billingMonthKey: billingMonth.key,
-    dueDateLabel: getDueDateLabel(input.mode, issuedAt),
+    dueDateLabel: getDueDateLabel(issuedAt),
     issuedAtISO: issuedAt.toISOString(),
     lines,
   }
